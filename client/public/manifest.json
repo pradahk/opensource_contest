@@ -1,0 +1,9 @@
+{
+  "name": "InnoView",
+  "short_name": "InnoView",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "description": "AI 취업 도구 플랫폼",
+  "icons": []
+} 

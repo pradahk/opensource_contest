@@ -1,0 +1,73 @@
+import React from "react";
+import { Routes, Route } from "react-router-dom";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Home from "./pages/Home";
+import InterviewRoom from "./pages/InterviewRoom";
+import FinalReport from "./pages/FinalReport";
+import SelectCompany from "./pages/SelectCompany";
+import Login from "./pages/Login/Login";
+import Register from "./pages/Login/Register";
+import Dashboard from "./pages/Dashboard";
+import Introduction from "./pages/Introduction";
+import WriteForm from "./pages/WriteForm";
+import MyPage from "./pages/MyPage";
+import EditDocument from "./pages/EditDocument";
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      
+      {/* 보호된 라우트들 */}
+      <Route path="/dashboard" element={
+        <ProtectedRoute>
+          <Dashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/interview" element={
+        <ProtectedRoute>
+          <InterviewRoom />
+        </ProtectedRoute>
+      } />
+      <Route path="/final-report" element={
+        <ProtectedRoute>
+          <FinalReport />
+        </ProtectedRoute>
+      } />
+      <Route path="/select-company" element={
+        <ProtectedRoute>
+          <SelectCompany />
+        </ProtectedRoute>
+      } />
+      <Route path="/write" element={
+        <ProtectedRoute>
+          <WriteForm />
+        </ProtectedRoute>
+      } />
+      <Route path="/mypage" element={
+        <ProtectedRoute>
+          <MyPage />
+        </ProtectedRoute>
+      } />
+      
+      {/* 문서 수정 라우트들 */}
+      <Route path="/edit-intro/:id" element={
+        <ProtectedRoute>
+          <EditDocument />
+        </ProtectedRoute>
+      } />
+      <Route path="/edit-resume/:id" element={
+        <ProtectedRoute>
+          <EditDocument />
+        </ProtectedRoute>
+      } />
+    </Routes>
+  );
+}
+
+export default App;
+
+
+
