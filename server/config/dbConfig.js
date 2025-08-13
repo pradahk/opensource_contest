@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const path = require("path");
 const dotenv = require("dotenv");
+const mysql = require("mysql2/promise");
 
 dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
@@ -10,6 +11,17 @@ if (!process.env.JWT_SECRET) {
 }
 
 const JWT_SECRET = process.env.JWT_SECRET;
+
+// 데이터베이스 연결 설정
+const pool = mysql.createPool({
+  host: process.env.DB_HOST || "localhost",
+  user: process.env.DB_USER || "root",
+  password: process.env.DB_PASSWORD || "",
+  database: process.env.DB_NAME || "innoview",
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
 
 // 데이터베이스 스키마 생성 함수
 const createTables = async (pool) => {
@@ -47,7 +59,8 @@ const createTables = async (pool) => {
       ('포스코'),
       ('KT'),
       ('LG전자'),
-      ('롯데정보통신')
+      ('롯데정보통신'),
+      ('배달의민족')
     `);
 
     // User_Interest_Companies 테이블 (사용자 관심기업)
@@ -177,6 +190,77 @@ const createTables = async (pool) => {
       )
     `);
 
+    // AI_Interview_Sessions 테이블 (AI 면접 세션)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_interview_sessions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_uuid VARCHAR(255) UNIQUE NOT NULL,
+        user_id INT NOT NULL,
+        company_id INT NULL DEFAULT NULL,
+        self_introduction_id INT NULL DEFAULT NULL,
+        resume_id INT NULL DEFAULT NULL,
+        current_question_number INT DEFAULT 1,
+        total_questions INT DEFAULT 0,
+        status ENUM('active', 'completed', 'paused') DEFAULT 'active',
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ended_at TIMESTAMP NULL,
+        thread_id VARCHAR(255) NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL,
+        FOREIGN KEY (self_introduction_id) REFERENCES self_introductions(id) ON DELETE SET NULL,
+        FOREIGN KEY (resume_id) REFERENCES resumes(id) ON DELETE SET NULL
+      )
+    `);
+
+    // AI_Interview_Questions 테이블 (AI 면접 질문)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_interview_questions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_id INT NOT NULL,
+        question_number INT NOT NULL,
+        question_text TEXT NOT NULL,
+        question_type ENUM('인성', '경험', '지식', '기타') NOT NULL,
+        is_follow_up BOOLEAN DEFAULT FALSE,
+        parent_question_id INT NULL DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES ai_interview_sessions(id) ON DELETE CASCADE,
+        FOREIGN KEY (parent_question_id) REFERENCES ai_interview_questions(id) ON DELETE SET NULL
+      )
+    `);
+
+    // AI_Interview_Answers 테이블 (AI 면접 답변)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_interview_answers (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_id INT NOT NULL,
+        question_id INT NOT NULL,
+        audio_path VARCHAR(500) NULL,
+        transcription TEXT NOT NULL,
+        ai_analysis JSON NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES ai_interview_sessions(id) ON DELETE CASCADE,
+        FOREIGN KEY (question_id) REFERENCES ai_interview_questions(id) ON DELETE CASCADE
+      )
+    `);
+
+    // AI_Interview_Feedback 테이블 (AI 면접 피드백)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_interview_feedback (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_id INT UNIQUE NOT NULL,
+        overall_score DECIMAL(3,2),
+        communication_score DECIMAL(3,2),
+        technical_score DECIMAL(3,2),
+        personality_score DECIMAL(3,2),
+        strengths TEXT,
+        weaknesses TEXT,
+        improvement_suggestions TEXT,
+        detailed_feedback JSON,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES ai_interview_sessions(id) ON DELETE CASCADE
+      )
+    `);
+
     console.log("데이터베이스 테이블이 성공적으로 생성되었습니다.");
   } catch (error) {
     console.error("테이블 생성 중 오류 발생:", error);
@@ -280,4 +364,5 @@ module.exports = {
   isAdmin,
   createTables,
   JWT_SECRET,
+  pool, // 풀 객체를 모듈 내보내기
 };

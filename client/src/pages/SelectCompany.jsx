@@ -17,20 +17,37 @@ const SelectCompany = () => {
         
         // 모든 기업 조회
         const companiesResponse = await companyAPI.getAll();
-        setCompanies(companiesResponse.data || []);
+        console.log('기업 목록 응답:', companiesResponse);
+        
+        if (companiesResponse.success && companiesResponse.data) {
+          setCompanies(companiesResponse.data);
+        } else {
+          console.warn('기업 목록 응답 구조가 예상과 다릅니다:', companiesResponse);
+          setCompanies([]);
+        }
         
         // 사용자의 관심기업 조회
         const userCompaniesResponse = await interestCompanyAPI.getUserCompanies();
-        const userCompanyIds = userCompaniesResponse.data.map(company => company.id);
-        setUserCompanies(userCompanyIds);
+        console.log('사용자 관심기업 응답:', userCompaniesResponse);
         
-        // 이미 선택된 기업이 있다면 첫 번째로 설정
-        if (userCompanyIds.length > 0) {
-          setSelected(userCompanyIds[0]);
+        if (userCompaniesResponse.success && userCompaniesResponse.data) {
+          const userCompanyIds = userCompaniesResponse.data.map(company => company.id);
+          setUserCompanies(userCompanyIds);
+          
+          // 이미 선택된 기업이 있다면 첫 번째로 설정
+          if (userCompanyIds.length > 0) {
+            setSelected(userCompanyIds[0]);
+          }
+        } else {
+          console.warn('사용자 관심기업 응답 구조가 예상과 다릅니다:', userCompaniesResponse);
+          setUserCompanies([]);
         }
       } catch (error) {
         console.error('기업 정보 로드 오류:', error);
         alert('기업 정보를 불러오는 중 오류가 발생했습니다.');
+        // 에러 발생 시 빈 배열로 설정
+        setCompanies([]);
+        setUserCompanies([]);
       } finally {
         setIsLoading(false);
       }

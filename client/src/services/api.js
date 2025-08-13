@@ -6,7 +6,10 @@ const API_BASE_URL = "http://localhost:3001/api";
 // axios 인스턴스 생성
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 120000, // 120초로 증가 (OpenAI API 응답 시간 고려)
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
 // 요청 인터셉터 - 토큰 자동 추가
@@ -16,17 +19,39 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log(
+      `API 요청: ${config.method?.toUpperCase()} ${config.url}`,
+      config.data
+    );
     return config;
   },
   (error) => {
+    console.error("API 요청 오류:", error);
     return Promise.reject(error);
   }
 );
 
 // 응답 인터셉터 - 에러 처리
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(
+      `API 응답: ${response.status} ${response.config.url}`,
+      response.data
+    );
+    return response;
+  },
   (error) => {
+    console.error("=== API 응답 오류 ===");
+    console.error("오류 타입:", error.constructor.name);
+    console.error("오류 메시지:", error.message);
+
+    if (error.response) {
+      console.error("응답 상태:", error.response.status);
+      console.error("응답 데이터:", error.response.data);
+    } else if (error.request) {
+      console.error("요청 오류:", error.request);
+    }
+
     if (error.response?.status === 401) {
       // 토큰이 만료되었거나 유효하지 않은 경우
       localStorage.removeItem("token");
@@ -202,7 +227,7 @@ export const interviewAPI = {
     const response = await api.post("/interview/answers", {
       session_id: answerData.sessionId,
       question_id: answerData.questionId,
-      transcription: answerData.transcription
+      transcription: answerData.transcription,
     });
     return response.data;
   },
@@ -349,6 +374,116 @@ export const userStatsAPI = {
   getStats: async () => {
     const response = await api.get("/users/stats");
     return response.data;
+  },
+};
+
+// AI 면접 관련 API
+export const aiInterviewAPI = {
+  // AI 인터뷰 세션 시작
+  startSession: async (sessionData) => {
+    try {
+      console.log("AI 인터뷰 세션 시작 요청:", sessionData);
+      const response = await api.post("/ai-interview/session/start", {
+        userId: sessionData.userId,
+        companyId: sessionData.companyId || null,
+        position: sessionData.position || null,
+      });
+      console.log("AI 인터뷰 세션 시작 성공:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("AI 인터뷰 세션 시작 실패:", error);
+      throw error;
+    }
+  },
+
+  // AI 인터뷰 세션 종료
+  endSession: async (threadId) => {
+    try {
+      console.log("AI 인터뷰 세션 종료 요청:", threadId);
+      const response = await api.post("/ai-interview/session/end", {
+        threadId: threadId,
+      });
+      console.log("AI 인터뷰 세션 종료 성공:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("AI 인터뷰 세션 종료 실패:", error);
+      throw error;
+    }
+  },
+
+  // 음성 인식 (STT) - 사용자 음성을 텍스트로 변환
+  transcribeAudio: async (audioFile) => {
+    try {
+      console.log("음성 인식 요청 시작");
+      const formData = new FormData();
+      formData.append("audio", audioFile);
+
+      const response = await api.post("/ai-interview/transcribe", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        timeout: 60000, // 음성 인식은 60초 타임아웃
+      });
+      console.log("음성 인식 성공:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("음성 인식 실패:", error);
+      throw error;
+    }
+  },
+
+  // AI 인터뷰어와의 대화 처리
+  chat: async (message, threadId = null) => {
+    try {
+      console.log("AI 채팅 요청:", { message, threadId });
+      const response = await api.post(
+        "/ai-interview/chat",
+        {
+          message: message,
+          thread_id: threadId,
+        },
+        {
+          timeout: 120000, // AI 채팅은 120초 타임아웃
+        }
+      );
+      console.log("AI 채팅 성공:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("AI 채팅 실패:", error);
+      throw error;
+    }
+  },
+
+  // 오디오 파일 다운로드
+  downloadAudio: async (filename) => {
+    try {
+      console.log("오디오 파일 다운로드 요청:", filename);
+      const response = await api.get(`/ai-interview/audio/${filename}`, {
+        responseType: "blob",
+        timeout: 30000,
+      });
+      console.log("오디오 파일 다운로드 성공");
+      return response.data;
+    } catch (error) {
+      console.error("오디오 파일 다운로드 실패:", error);
+      throw error;
+    }
+  },
+
+  // AI 오디오 파일 다운로드
+  downloadAIAudio: async (filename) => {
+    try {
+      console.log("AI 오디오 파일 다운로드 요청:", filename);
+      const response = await api.get(`/ai-interview/audio/ai/${filename}`, {
+        responseType: "blob",
+        timeout: 30000,
+      });
+      console.log("AI 오디오 파일 다운로드 성공");
+      return response.data;
+    } catch (error) {
+      console.error("AI 오디오 파일 다운로드 실패:", error);
+      throw error;
+    }
   },
 };
 

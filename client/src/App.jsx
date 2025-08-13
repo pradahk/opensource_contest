@@ -12,6 +12,10 @@ import Introduction from "./pages/Introduction";
 import WriteForm from "./pages/WriteForm";
 import MyPage from "./pages/MyPage";
 import EditDocument from "./pages/EditDocument";
+import AIInterviewList from "./pages/AIInterviewList";
+import AIInterviewSelect from "./pages/AIInterviewSelect";
+import AIInterviewRoom from "./pages/AIInterviewRoom";
+import AIInterviewFeedback from "./pages/AIInterviewFeedback";
 
 function App() {
   return (
@@ -49,6 +53,28 @@ function App() {
       <Route path="/mypage" element={
         <ProtectedRoute>
           <MyPage />
+        </ProtectedRoute>
+      } />
+      
+      {/* AI 면접 관련 라우트들 */}
+      <Route path="/ai-interview" element={
+        <ProtectedRoute>
+          <AIInterviewList />
+        </ProtectedRoute>
+      } />
+      <Route path="/ai-interview/select" element={
+        <ProtectedRoute>
+          <AIInterviewSelect />
+        </ProtectedRoute>
+      } />
+      <Route path="/ai-interview/room/:sessionId" element={
+        <ProtectedRoute>
+          <AIInterviewRoom />
+        </ProtectedRoute>
+      } />
+      <Route path="/ai-interview/feedback/:sessionId" element={
+        <ProtectedRoute>
+          <AIInterviewFeedback />
         </ProtectedRoute>
       } />
       

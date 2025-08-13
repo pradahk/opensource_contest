@@ -14,16 +14,41 @@ const Dashboard = () => {
       try {
         setIsLoading(true);
         
+        console.log('문서 로드 시작...');
+        
         // 자기소개서와 이력서 목록 로드
         const [introResponse, resumeResponse] = await Promise.all([
           selfIntroductionAPI.getAll(),
           resumeAPI.getAll()
         ]);
         
-        setIntroductions(introResponse.data || []);
-        setResumes(resumeResponse.data || []);
+        console.log('자기소개서 응답:', introResponse);
+        console.log('이력서 응답:', resumeResponse);
+        
+        // 서버 응답 구조: { success: true, data: [...] }
+        if (introResponse.success && introResponse.data) {
+          setIntroductions(introResponse.data);
+        } else {
+          console.warn('자기소개서 응답 구조가 예상과 다릅니다:', introResponse);
+          setIntroductions([]);
+        }
+        
+        if (resumeResponse.success && resumeResponse.data) {
+          setResumes(resumeResponse.data);
+        } else {
+          console.warn('이력서 응답 구조가 예상과 다릅니다:', resumeResponse);
+          setResumes([]);
+        }
       } catch (error) {
         console.error('문서 로드 오류:', error);
+        console.error('에러 상세 정보:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status
+        });
+        // 에러 발생 시 빈 배열로 설정
+        setIntroductions([]);
+        setResumes([]);
       } finally {
         setIsLoading(false);
       }
@@ -179,7 +204,7 @@ const Dashboard = () => {
             </div>
           </div>
           
-          <div className="card dashboard-card" onClick={() => navigate('/select-company')} style={{
+          <div className="card dashboard-card" onClick={() => navigate('/ai-interview')} style={{
             background: '#ffffff',
             border: '3px solid #e5e7eb',
             boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)'
@@ -197,13 +222,13 @@ const Dashboard = () => {
               marginBottom: '20px',
               boxShadow: '0 8px 32px rgba(245, 158, 11, 0.3)'
             }}>
-              🎤
+              🤖
             </div>
             <h3 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '12px', color: '#000000' }}>
               AI 면접
             </h3>
             <p style={{ color: '#374151', lineHeight: '1.6', marginBottom: '20px', fontSize: '0.95rem', fontWeight: '500' }}>
-              관심 기업을 선택하고 AI 면접을 시작하세요.
+              AI와 함께 맞춤형 면접을 진행하고 실시간 피드백을 받으세요.
             </p>
             <div style={{ 
               display: 'flex', 
@@ -215,7 +240,7 @@ const Dashboard = () => {
               border: '2px solid rgba(245, 158, 11, 0.3)'
             }}>
               <span style={{ fontSize: '0.9rem', color: '#f59e0b', fontWeight: '700' }}>
-                실시간 음성 분석
+                AI 기반 맞춤 면접
               </span>
               <div style={{ fontSize: '12px', color: '#6b7280' }}>→</div>
             </div>

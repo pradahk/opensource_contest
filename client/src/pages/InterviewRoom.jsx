@@ -24,6 +24,15 @@ const InterviewRoom = () => {
         
         // 사용자의 관심기업 조회
         const userCompaniesResponse = await interestCompanyAPI.getUserCompanies();
+        console.log('관심기업 응답:', userCompaniesResponse);
+        
+        if (!userCompaniesResponse.success || !userCompaniesResponse.data) {
+          console.warn('관심기업 응답 구조가 예상과 다릅니다:', userCompaniesResponse);
+          alert('관심기업 정보를 불러오는 중 오류가 발생했습니다.');
+          navigate('/select-company');
+          return;
+        }
+        
         const userCompanies = userCompaniesResponse.data;
         
         if (userCompanies.length === 0) {
@@ -38,13 +47,24 @@ const InterviewRoom = () => {
         
         // 해당 기업의 질문들 조회
         const questionsResponse = await questionAPI.getByCompany(defaultCompany.id);
-        const companyQuestions = questionsResponse.data || [];
+        console.log('기업별 질문 응답:', questionsResponse);
+        
+        let companyQuestions = [];
+        if (questionsResponse.success && questionsResponse.data) {
+          companyQuestions = questionsResponse.data;
+        }
         
         // 질문이 없으면 기본 질문 사용
         if (companyQuestions.length === 0) {
           const allQuestionsResponse = await questionAPI.getAll();
-          const allQuestions = allQuestionsResponse.data || [];
-          setQuestions(allQuestions.slice(0, 5)); // 최대 5개 질문
+          console.log('전체 질문 응답:', allQuestionsResponse);
+          
+          if (allQuestionsResponse.success && allQuestionsResponse.data) {
+            const allQuestions = allQuestionsResponse.data;
+            setQuestions(allQuestions.slice(0, 5)); // 최대 5개 질문
+          } else {
+            setQuestions([]);
+          }
         } else {
           setQuestions(companyQuestions.slice(0, 5)); // 최대 5개 질문
         }
@@ -53,7 +73,11 @@ const InterviewRoom = () => {
         const sessionResponse = await interviewAPI.createSession({
           companyId: defaultCompany ? defaultCompany.id : null
         });
-        setSessionId(sessionResponse.data.session_uuid);
+        console.log('세션 생성 응답:', sessionResponse);
+        
+        if (sessionResponse.success && sessionResponse.data) {
+          setSessionId(sessionResponse.data.session_uuid);
+        }
         
       } catch (error) {
         console.error('면접 초기화 오류:', error);
