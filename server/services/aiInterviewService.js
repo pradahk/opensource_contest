@@ -25,11 +25,55 @@ if (!assistantId) {
   console.warn("ASSISTANT_ID가 설정되지 않았습니다. 기본 질문을 사용합니다.");
 }
 
+// 기업별 Assistant ID 선택
+function resolveAssistantId(companyId) {
+  try {
+    const mapByCode = {
+      baemin: process.env.BAEMIN,
+      coupang: process.env.COUPANG,
+      naver: process.env.NAVER,
+      kakao: process.env.KAKAO,
+    };
+
+    if (!companyId) {
+      return process.env.ASSISTANT_ID || process.env.BAEMIN || assistantId;
+    }
+
+    if (typeof companyId === "string" && mapByCode[companyId]) {
+      return mapByCode[companyId] || assistantId;
+    }
+
+    // 숫자/기타 ID인 경우 회사 이름으로 유추
+    const nameToEnv = {
+      "배달의 민족": process.env.BAEMIN,
+      쿠팡: process.env.COUPANG,
+      네이버: process.env.NAVER,
+      카카오: process.env.KAKAO,
+    };
+
+    // 동기 접근이 아니므로 기본값 반환. 실제 조회는 호출부에서 company_name으로 처리됨
+    return process.env.ASSISTANT_ID || assistantId;
+  } catch (e) {
+    return process.env.ASSISTANT_ID || assistantId;
+  }
+}
+
 // 기업 정보 가져오기
 async function getCompanyInfo(companyId) {
   try {
     if (!companyId || companyId === "일반") {
       return "일반 기업";
+    }
+
+    // 문자열 코드 매핑(프론트 고정 셋)
+    const codeToNameMap = {
+      baemin: "배달의 민족",
+      coupang: "쿠팡",
+      naver: "네이버",
+      kakao: "카카오",
+    };
+    if (typeof companyId === "string" && codeToNameMap[companyId]) {
+      return codeToNameMap[companyId];
     }
 
     const company = await Company.findById(companyId);
@@ -75,7 +119,11 @@ async function getResumeInfo(resumeId) {
 }
 
 // Assistant API를 통해 메시지 전송 및 응답 받기
-async function sendMessageToAssistant(message, threadId = null) {
+async function sendMessageToAssistant(
+  message,
+  threadId = null,
+  companyId = null
+) {
   try {
     // OpenAI API가 설정되지 않은 경우
     if (!openai || !assistantId) {
@@ -86,6 +134,7 @@ async function sendMessageToAssistant(message, threadId = null) {
     }
 
     let currentThreadId = threadId;
+    const assistantIdToUse = resolveAssistantId(companyId);
 
     if (!currentThreadId) {
       // 새로운 스레드 생성
@@ -94,14 +143,16 @@ async function sendMessageToAssistant(message, threadId = null) {
     }
 
     // 메시지 생성
+    const instruction = `응답은 반드시 JSON만 출력하세요. 불필요한 설명이나 문장은 포함하지 마세요.`;
+    const composed = `${instruction}\n\n${message}`;
     await openai.beta.threads.messages.create(currentThreadId, {
       role: "user",
-      content: message,
+      content: composed,
     });
 
     // Assistant 실행 및 polling
     const run = await openai.beta.threads.runs.createAndPoll(currentThreadId, {
-      assistant_id: assistantId,
+      assistant_id: assistantIdToUse,
     });
 
     // run.status가 completed인지 확인
@@ -144,18 +195,37 @@ async function sendMessageToAssistant(message, threadId = null) {
   }
 }
 
-// 초기 면접 질문 생성
-async function generateInitialQuestion(userData) {
+function safeParseAssistantResponse(raw, defaultType) {
   try {
-    console.log("초기 질문 생성 시작:", { userData });
+    let text = typeof raw === "string" ? raw.trim() : "";
+    if (!text) return null;
+    if (text.startsWith("```")) {
+      const firstNl = text.indexOf("\n");
+      if (firstNl !== -1) text = text.slice(firstNl + 1);
+      if (text.endsWith("```")) text = text.slice(0, -3).trim();
+    }
+    return JSON.parse(text);
+  } catch (e) {
+    return {
+      question_text: String(raw || ""),
+      question_type: defaultType || "기타",
+    };
+  }
+}
+
+// 작업 0: 자기소개 요청 (무조건 첫 단계)
+async function requestSelfIntroduction(userData) {
+  try {
+    console.log("자기소개 요청 시작:", { userData });
 
     // OpenAI API가 설정되지 않은 경우 기본 질문 반환
     if (!openai || !assistantId) {
-      console.log("OpenAI API가 설정되지 않음. 기본 질문 사용");
+      console.log("OpenAI API가 설정되지 않음. 기본 자기소개 요청 사용");
       return {
         success: true,
         data: {
-          question_text: "자기소개를 해주세요.",
+          question_text:
+            "면접을 시작하겠습니다. 먼저, 본인에 대해 간단히 소개해 주시겠어요?",
           question_type: "인성",
         },
         thread_id: null,
@@ -177,16 +247,18 @@ async function generateInitialQuestion(userData) {
       resumeLength: resume.length,
     });
 
-    const userPrompt = `작업 1(초기 질문 생성)을 위한 입력:
+    const userPrompt = `
+
+작업 0(자기소개 요청)을 위한 입력:
 {
-  "task_type": "initial_question",
-  "company_name": "${companyName}",
+  "task_type": "self_introduction_request",
+  "company_id": "${companyName}",
   "self_introduction": "${selfIntroduction.replace(/"/g, '\\"')}",
   "resume": "${resume.replace(/"/g, '\\"')}"
 }`;
 
-    console.log("Assistant에 메시지 전송 시작");
-    const result = await sendMessageToAssistant(userPrompt);
+    console.log("Assistant에 자기소개 요청 메시지 전송 시작");
+    const result = await sendMessageToAssistant(userPrompt, null, company_id);
 
     if (!result.success) {
       console.error("Assistant 응답 실패:", result.error);
@@ -198,27 +270,90 @@ async function generateInitialQuestion(userData) {
 
     console.log("Assistant 응답 받음:", result.response);
 
-    // JSON 파싱
-    try {
-      const parsedResponse = JSON.parse(result.response);
-      console.log("JSON 파싱 성공:", parsedResponse);
+    // JSON 파싱 (유연하게 처리)
+    const parsed = safeParseAssistantResponse(result.response, "인성");
+    return {
+      success: true,
+      data: parsed,
+      thread_id: result.thread_id,
+    };
+  } catch (error) {
+    console.error("자기소개 요청 오류:", error);
+    return {
+      success: false,
+      error: `자기소개 요청 중 오류가 발생했습니다: ${error.message}`,
+    };
+  }
+}
+
+// 작업 1: 초기 면접 질문 생성
+async function generateInitialQuestion(userData, threadId = null) {
+  try {
+    console.log("초기 질문 생성 시작:", { userData });
+
+    // OpenAI API가 설정되지 않은 경우 기본 질문 반환
+    if (!openai || !assistantId) {
+      console.log("OpenAI API가 설정되지 않음. 기본 질문 사용");
       return {
         success: true,
-        data: parsedResponse,
-        thread_id: result.thread_id,
-      };
-    } catch (parseError) {
-      console.error(
-        "JSON 파싱 오류:",
-        parseError,
-        "원본 응답:",
-        result.response
-      );
-      return {
-        success: false,
-        error: "응답 파싱에 실패했습니다.",
+        data: {
+          question_text:
+            "귀하의 데이터 분석 경험 중 가장 도전적이었던 프로젝트는 무엇이었고, 이를 어떻게 해결하셨나요?",
+          question_type: "경험",
+        },
+        thread_id: null,
       };
     }
+
+    const { company_id, self_introduction_id, resume_id } = userData;
+
+    // 실제 데이터 가져오기
+    const companyName = await getCompanyInfo(company_id);
+    const selfIntroduction = await getSelfIntroductionInfo(
+      self_introduction_id
+    );
+    const resume = await getResumeInfo(resume_id);
+
+    console.log("데이터 조회 완료:", {
+      companyName,
+      selfIntroductionLength: selfIntroduction.length,
+      resumeLength: resume.length,
+    });
+
+    const userPrompt = `
+
+작업 1(초기 면접 질문 생성)을 위한 입력:
+{
+  "task_type": "initial_question",
+  "company_id": "${companyName}",
+  "self_introduction": "${selfIntroduction.replace(/"/g, '\\"')}",
+  "resume": "${resume.replace(/"/g, '\\"')}"
+}`;
+
+    console.log("Assistant에 메시지 전송 시작");
+    const result = await sendMessageToAssistant(
+      userPrompt,
+      threadId,
+      company_id
+    );
+
+    if (!result.success) {
+      console.error("Assistant 응답 실패:", result.error);
+      return {
+        success: false,
+        error: result.error,
+      };
+    }
+
+    console.log("Assistant 응답 받음:", result.response);
+
+    // JSON 파싱 (유연하게 처리)
+    const parsed = safeParseAssistantResponse(result.response, "경험");
+    return {
+      success: true,
+      data: parsed,
+      thread_id: result.thread_id,
+    };
   } catch (error) {
     console.error("초기 질문 생성 오류:", error);
     return {
@@ -228,7 +363,7 @@ async function generateInitialQuestion(userData) {
   }
 }
 
-// 심화/꼬리 질문 생성
+// 작업 2: 심화/꼬리 질문 생성
 async function generateFollowUpQuestion(userData, threadId = null) {
   try {
     const {
@@ -246,17 +381,23 @@ async function generateFollowUpQuestion(userData, threadId = null) {
     );
     const resume = await getResumeInfo(resume_id);
 
-    const userPrompt = `작업 2(심화/꼬리 질문 생성)을 위한 입력:
+    const userPrompt = `
+
+작업 2(심화/꼬리 질문 생성)을 위한 입력:
 {
   "task_type": "follow_up_question",
-  "company_name": "${companyName}",
+  "company_id": "${companyName}",
   "question_text": "${question_text.replace(/"/g, '\\"')}",
   "transcription": "${transcription.replace(/"/g, '\\"')}",
   "self_introduction": "${selfIntroduction.replace(/"/g, '\\"')}",
   "resume": "${resume.replace(/"/g, '\\"')}"
 }`;
 
-    const result = await sendMessageToAssistant(userPrompt, threadId);
+    const result = await sendMessageToAssistant(
+      userPrompt,
+      threadId,
+      company_id
+    );
 
     if (!result.success) {
       return {
@@ -265,20 +406,12 @@ async function generateFollowUpQuestion(userData, threadId = null) {
       };
     }
 
-    try {
-      const parsedResponse = JSON.parse(result.response);
-      return {
-        success: true,
-        data: parsedResponse,
-        thread_id: result.thread_id,
-      };
-    } catch (parseError) {
-      console.error("JSON 파싱 오류:", parseError);
-      return {
-        success: false,
-        error: "응답 파싱에 실패했습니다.",
-      };
-    }
+    const parsed = safeParseAssistantResponse(result.response, "기타");
+    return {
+      success: true,
+      data: parsed,
+      thread_id: result.thread_id,
+    };
   } catch (error) {
     console.error("심화 질문 생성 오류:", error);
     return {
@@ -288,7 +421,7 @@ async function generateFollowUpQuestion(userData, threadId = null) {
   }
 }
 
-// 다음 기본 면접 질문으로 전환
+// 작업 3: 다음 기본 면접 질문으로 전환
 async function generateNextQuestion(userData, threadId = null) {
   try {
     const {
@@ -307,10 +440,12 @@ async function generateNextQuestion(userData, threadId = null) {
     );
     const resume = await getResumeInfo(resume_id);
 
-    const userPrompt = `작업 3(다음 기본 질문 생성)을 위한 입력:
+    const userPrompt = `
+
+작업 3(다음 기본 질문 생성)을 위한 입력:
 {
   "task_type": "next_question",
-  "company_name": "${companyName}",
+  "company_id": "${companyName}",
   "question_text": "${question_text.replace(/"/g, '\\"')}",
   "transcription": "${transcription.replace(/"/g, '\\"')}",
   "self_introduction": "${selfIntroduction.replace(/"/g, '\\"')}",
@@ -318,7 +453,11 @@ async function generateNextQuestion(userData, threadId = null) {
   "current_question_count": ${current_question_count}
 }`;
 
-    const result = await sendMessageToAssistant(userPrompt, threadId);
+    const result = await sendMessageToAssistant(
+      userPrompt,
+      threadId,
+      company_id
+    );
 
     if (!result.success) {
       return {
@@ -327,25 +466,124 @@ async function generateNextQuestion(userData, threadId = null) {
       };
     }
 
-    try {
-      const parsedResponse = JSON.parse(result.response);
-      return {
-        success: true,
-        data: parsedResponse,
-        thread_id: result.thread_id,
-      };
-    } catch (parseError) {
-      console.error("JSON 파싱 오류:", parseError);
-      return {
-        success: false,
-        error: "응답 파싱에 실패했습니다.",
-      };
-    }
+    const parsed = safeParseAssistantResponse(result.response, "기타");
+    return {
+      success: true,
+      data: parsed,
+      thread_id: result.thread_id,
+    };
   } catch (error) {
     console.error("다음 질문 생성 오류:", error);
     return {
       success: false,
       error: "다음 질문 생성 중 오류가 발생했습니다.",
+    };
+  }
+}
+
+// 작업 4: 면접 종료 조건 감지
+async function checkInterviewEndCondition(userData, threadId = null) {
+  try {
+    const {
+      company_id,
+      question_text,
+      transcription,
+      self_introduction_id,
+      resume_id,
+    } = userData;
+
+    // 종료 키워드 감지
+    const endKeywords = [
+      "마지막으로",
+      "끝으로",
+      "마지막 질문입니다",
+      "이것으로",
+      "면접을 마치겠습니다",
+    ];
+    const hasEndKeyword = endKeywords.some(
+      (keyword) =>
+        transcription.includes(keyword) || question_text.includes(keyword)
+    );
+
+    if (hasEndKeyword) {
+      return {
+        success: true,
+        data: {
+          question_text:
+            "면접에 응해 주셔서 감사합니다. 오늘 말씀해 주신 내용을 바탕으로 추후 결과를 안내드리겠습니다.",
+          question_type: "기타",
+          is_end: true,
+        },
+        thread_id: threadId,
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        is_end: false,
+      },
+      thread_id: threadId,
+    };
+  } catch (error) {
+    console.error("면접 종료 조건 확인 오류:", error);
+    return {
+      success: false,
+      error: "면접 종료 조건 확인 중 오류가 발생했습니다.",
+    };
+  }
+}
+
+// 통합 질문 생성 함수 (5단계 프로세스)
+async function generateQuestion(userData, threadId = null) {
+  try {
+    const {
+      task_type,
+      company_id,
+      question_text,
+      transcription,
+      self_introduction_id,
+      resume_id,
+      current_question_count = 0,
+    } = userData;
+
+    console.log("질문 생성 시작:", { task_type, current_question_count });
+
+    // 작업 0: 자기소개 요청 (첫 번째 질문)
+    if (
+      task_type === "self_introduction_request" ||
+      current_question_count === 0
+    ) {
+      return await requestSelfIntroduction(userData);
+    }
+
+    // 작업 4: 면접 종료 조건 감지
+    const endCheck = await checkInterviewEndCondition(userData, threadId);
+    if (endCheck.success && endCheck.data.is_end) {
+      return endCheck;
+    }
+
+    // 작업 1: 초기 면접 질문 생성 (자기소개 후 첫 번째 질문)
+    if (task_type === "initial_question" || current_question_count === 1) {
+      return await generateInitialQuestion(userData, threadId);
+    }
+
+    // 작업 2: 심화/꼬리 질문 생성 (답변이 간결하거나 모호한 경우)
+    if (
+      task_type === "follow_up_question" ||
+      (transcription && transcription.length < 100)
+    ) {
+      // 간결한 답변 감지
+      return await generateFollowUpQuestion(userData, threadId);
+    }
+
+    // 작업 3: 다음 기본 면접 질문으로 전환
+    return await generateNextQuestion(userData, threadId);
+  } catch (error) {
+    console.error("통합 질문 생성 오류:", error);
+    return {
+      success: false,
+      error: `질문 생성 중 오류가 발생했습니다: ${error.message}`,
     };
   }
 }
@@ -374,7 +612,7 @@ async function generateInterviewFeedback(sessionData) {
       }))
     )}`;
 
-    const result = await sendMessageToAssistant(userPrompt);
+    const result = await sendMessageToAssistant(userPrompt, null, company_id);
 
     if (!result.success) {
       return {
@@ -383,20 +621,12 @@ async function generateInterviewFeedback(sessionData) {
       };
     }
 
-    try {
-      const parsedResponse = JSON.parse(result.response);
-      return {
-        success: true,
-        data: parsedResponse,
-        thread_id: result.thread_id,
-      };
-    } catch (parseError) {
-      console.error("JSON 파싱 오류:", parseError);
-      return {
-        success: false,
-        error: "응답 파싱에 실패했습니다.",
-      };
-    }
+    const parsed = safeParseAssistantResponse(result.response, "기타");
+    return {
+      success: true,
+      data: parsed,
+      thread_id: result.thread_id,
+    };
   } catch (error) {
     console.error("피드백 생성 오류:", error);
     return {
@@ -464,8 +694,11 @@ async function handleChat(req, res) {
 
 module.exports = {
   handleChat,
+  generateQuestion,
+  requestSelfIntroduction,
   generateInitialQuestion,
   generateFollowUpQuestion,
   generateNextQuestion,
+  checkInterviewEndCondition,
   generateInterviewFeedback,
 };

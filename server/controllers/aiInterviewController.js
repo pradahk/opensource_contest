@@ -4,6 +4,9 @@ const { Readable } = require("stream");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
 const dotenv = require("dotenv");
+const User = require("../models/User");
+const SelfIntroduction = require("../models/SelfIntroduction");
+const Resume = require("../models/Resume");
 
 // .env 파일에서 환경 변수 로드
 dotenv.config({
@@ -37,6 +40,22 @@ if (!fs.existsSync(audioDir)) {
 }
 if (!fs.existsSync(aiAudioDir)) {
   fs.mkdirSync(aiAudioDir);
+}
+
+// 기업별 Assistant ID 매핑
+function resolveAssistantId(companyId) {
+  const mapByCode = {
+    baemin: process.env.BAEMIN,
+    coupang: process.env.COUPANG,
+    naver: process.env.NAVER,
+    kakao: process.env.KAKAO,
+  };
+  if (!companyId)
+    return process.env.ASSISTANT_ID || process.env.BAEMIN || assistantId;
+  if (typeof companyId === "string" && mapByCode[companyId]) {
+    return mapByCode[companyId] || assistantId;
+  }
+  return process.env.ASSISTANT_ID || assistantId;
 }
 
 // 음성 인식 (STT) - 사용자 음성을 텍스트로 변환
@@ -159,6 +178,7 @@ async function handleChat(req, res) {
   try {
     const userQuestion = req.body.message;
     let threadId = req.body.thread_id;
+    const companyId = req.body.company_id || null;
 
     console.log("=== AI 인터뷰 대화 시작 ===");
     console.log("사용자 질문:", userQuestion);
@@ -197,7 +217,7 @@ async function handleChat(req, res) {
     // Assistant 실행
     console.log("Assistant 실행 시작...");
     const run = await openai.beta.threads.runs.create(threadId, {
-      assistant_id: assistantId,
+      assistant_id: resolveAssistantId(companyId),
     });
     console.log("Assistant 실행 ID:", run.id);
 
@@ -274,7 +294,7 @@ async function handleChat(req, res) {
 
       const ttsRequest = {
         input: { text: assistantResponseText },
-        voice: { languageCode: "ko-KR", name: "ko-KR-Neural2-A" }, // 한국어 음성
+        voice: { languageCode: "en-US", name: "en-US-Journey-F" }, // 한국어 음성
         audioConfig: { audioEncoding: "MP3" },
       };
 
@@ -355,7 +375,16 @@ async function handleChat(req, res) {
 // AI 인터뷰 세션 시작
 async function startInterviewSession(req, res) {
   try {
-    const { userId, companyId, position } = req.body;
+    const { userId, companyId, position, includeInitialQuestion } = req.body;
+
+    console.log("=== AI 인터뷰 세션 시작 요청 ===");
+    console.log("요청 시간:", new Date().toISOString());
+    console.log("사용자 ID:", userId);
+    console.log("회사 ID:", companyId);
+    console.log("포지션:", position);
+    console.log("초기 질문 포함:", includeInitialQuestion);
+    console.log("요청 ID:", req.headers["x-request-id"] || "없음");
+    console.log("=====================================");
 
     // OpenAI API 키가 설정되지 않은 경우 임시 응답
     if (!process.env.OPENAI_API_KEY) {
@@ -366,11 +395,86 @@ async function startInterviewSession(req, res) {
         success: true,
         thread_id: `temp_thread_${Date.now()}`,
         message: "AI 인터뷰 세션이 시작되었습니다. (임시 모드)",
+        initialQuestion:
+          "안녕하세요! 면접을 시작하겠습니다. 자기소개를 해주세요.",
+        audioContent: null,
       });
     }
 
     // 새로운 스레드 생성
     const thread = await openai.beta.threads.create();
+
+    let initialQuestion = null;
+    let audioContent = null;
+
+    // 초기 질문이 요청된 경우 생성
+    if (includeInitialQuestion) {
+      try {
+        // 초기 메시지를 스레드에 추가
+        await openai.beta.threads.messages.create(thread.id, {
+          role: "user",
+          content: "안녕하세요. 면접을 시작해주세요.",
+        });
+
+        // 어시스턴트 실행
+        const run = await openai.beta.threads.runs.create(thread.id, {
+          assistant_id: resolveAssistantId(companyId),
+        });
+
+        // 실행 완료 대기
+        let runStatus = await openai.beta.threads.runs.retrieve(
+          thread.id,
+          run.id
+        );
+        while (
+          runStatus.status === "in_progress" ||
+          runStatus.status === "queued"
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          runStatus = await openai.beta.threads.runs.retrieve(
+            thread.id,
+            run.id
+          );
+        }
+
+        if (runStatus.status === "completed") {
+          // 최신 메시지 가져오기
+          const messages = await openai.beta.threads.messages.list(thread.id);
+          const latestMessage = messages.data[0];
+
+          if (
+            latestMessage &&
+            latestMessage.content &&
+            latestMessage.content.length > 0
+          ) {
+            initialQuestion = latestMessage.content[0].text.value;
+
+            // TTS로 음성 생성 (Google Cloud TTS가 설정된 경우)
+            if (textToSpeech) {
+              try {
+                const client = new textToSpeech.TextToSpeechClient();
+                const request = {
+                  input: { text: initialQuestion },
+                  voice: { languageCode: "ko-KR", ssmlGender: "NEUTRAL" },
+                  audioConfig: { audioEncoding: "MP3" },
+                };
+
+                const [response] = await client.synthesizeSpeech(request);
+                audioContent = Buffer.from(response.audioContent).toString(
+                  "base64"
+                );
+              } catch (ttsError) {
+                console.warn("TTS 생성 실패:", ttsError);
+              }
+            }
+          }
+        }
+      } catch (questionError) {
+        console.warn("초기 질문 생성 실패:", questionError);
+        initialQuestion =
+          "안녕하세요! 면접을 시작하겠습니다. 자기소개를 해주세요.";
+      }
+    }
 
     // 세션 정보를 데이터베이스에 저장 (필요시)
     // const session = await AIInterviewSession.create({
@@ -385,6 +489,8 @@ async function startInterviewSession(req, res) {
       success: true,
       thread_id: thread.id,
       message: "AI 인터뷰 세션이 시작되었습니다.",
+      initialQuestion: initialQuestion,
+      audioContent: audioContent,
     });
   } catch (error) {
     console.error("세션 시작 오류:", error);
@@ -416,9 +522,107 @@ async function endInterviewSession(req, res) {
   }
 }
 
+// AI 면접 질문 생성 (5단계 프로세스)
+async function generateQuestion(req, res) {
+  try {
+    console.log("=== AI 면접 질문 생성 시작 ===");
+
+    const {
+      task_type,
+      company_id,
+      question_text,
+      transcription,
+      thread_id,
+      current_question_count = 0,
+    } = req.body;
+
+    // 사용자 정보 가져오기
+    const userId = req.user.userId;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: "사용자를 찾을 수 없습니다.",
+      });
+    }
+
+    // 사용자의 자기소개서와 이력서 정보 가져오기 (최신 1건 사용)
+    const selfIntroductions = await SelfIntroduction.findByUserId(userId);
+    const resumes = await Resume.findByUserId(userId);
+    const selfIntroductionId =
+      Array.isArray(selfIntroductions) && selfIntroductions.length > 0
+        ? selfIntroductions[0].id
+        : null;
+    const resumeId =
+      Array.isArray(resumes) && resumes.length > 0 ? resumes[0].id : null;
+
+    const userData = {
+      task_type,
+      company_id,
+      question_text,
+      transcription,
+      self_introduction_id: selfIntroductionId,
+      resume_id: resumeId,
+      current_question_count,
+    };
+
+    console.log("질문 생성 데이터:", userData);
+
+    // aiInterviewService의 generateQuestion 함수 호출
+    const aiInterviewService = require("../services/aiInterviewService");
+    const result = await aiInterviewService.generateQuestion(
+      userData,
+      thread_id
+    );
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error,
+      });
+    }
+
+    // TTS로 음성 생성 (Google Cloud TTS가 설정된 경우)
+    let audioContent = null;
+    if (textToSpeech && result.data.question_text) {
+      try {
+        const client = new textToSpeech.TextToSpeechClient();
+        const request = {
+          input: { text: result.data.question_text },
+          voice: { languageCode: "en-US", name: "en-US-Journey-F" },
+          audioConfig: { audioEncoding: "MP3" },
+        };
+
+        const [response] = await client.synthesizeSpeech(request);
+        audioContent = Buffer.from(response.audioContent).toString("base64");
+      } catch (ttsError) {
+        console.warn("TTS 생성 실패:", ttsError);
+      }
+    }
+
+    console.log("=== AI 면접 질문 생성 완료 ===");
+    console.log("생성된 질문:", result.data);
+
+    res.json({
+      success: true,
+      data: result.data,
+      thread_id: result.thread_id,
+      audioContent: audioContent,
+    });
+  } catch (error) {
+    console.error("질문 생성 오류:", error);
+    res.status(500).json({
+      success: false,
+      error: "질문 생성 중 오류가 발생했습니다.",
+    });
+  }
+}
+
 module.exports = {
   transcribeAudio,
   handleChat,
   startInterviewSession,
   endInterviewSession,
+  generateQuestion,
 };

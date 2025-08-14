@@ -30,6 +30,9 @@
 
 .session-info {
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .question-counter {
@@ -40,6 +43,16 @@
   font-weight: 600;
   font-size: 1.1rem;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.interview-stage {
+  background: linear-gradient(45deg, #4ecdc4, #44a08d);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 15px;
+  font-weight: 500;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 }
 
 .interview-controls {

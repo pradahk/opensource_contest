@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { selfIntroductionAPI, resumeAPI } from '../services/api';
 
+// 개발 환경 확인
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [introductions, setIntroductions] = useState([]);
@@ -14,7 +17,9 @@ const Dashboard = () => {
       try {
         setIsLoading(true);
         
-        console.log('문서 로드 시작...');
+        if (isDevelopment) {
+          console.log('문서 로드 시작...');
+        }
         
         // 자기소개서와 이력서 목록 로드
         const [introResponse, resumeResponse] = await Promise.all([
@@ -22,30 +27,38 @@ const Dashboard = () => {
           resumeAPI.getAll()
         ]);
         
-        console.log('자기소개서 응답:', introResponse);
-        console.log('이력서 응답:', resumeResponse);
+        if (isDevelopment) {
+          console.log('자기소개서 응답:', introResponse);
+          console.log('이력서 응답:', resumeResponse);
+        }
         
         // 서버 응답 구조: { success: true, data: [...] }
         if (introResponse.success && introResponse.data) {
           setIntroductions(introResponse.data);
         } else {
-          console.warn('자기소개서 응답 구조가 예상과 다릅니다:', introResponse);
+          if (isDevelopment) {
+            console.warn('자기소개서 응답 구조가 예상과 다릅니다:', introResponse);
+          }
           setIntroductions([]);
         }
         
         if (resumeResponse.success && resumeResponse.data) {
           setResumes(resumeResponse.data);
         } else {
-          console.warn('이력서 응답 구조가 예상과 다릅니다:', resumeResponse);
+          if (isDevelopment) {
+            console.warn('이력서 응답 구조가 예상과 다릅니다:', resumeResponse);
+          }
           setResumes([]);
         }
       } catch (error) {
-        console.error('문서 로드 오류:', error);
-        console.error('에러 상세 정보:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status
-        });
+        if (isDevelopment) {
+          console.error('문서 로드 오류:', error);
+          console.error('에러 상세 정보:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+          });
+        }
         // 에러 발생 시 빈 배열로 설정
         setIntroductions([]);
         setResumes([]);

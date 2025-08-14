@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  companyAPI, 
   selfIntroductionAPI, 
   resumeAPI, 
   aiInterviewAPI 
 } from '../services/api';
 import '../styles/AIInterviewSelect.css';
+
+// 개발 환경 확인
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 const AIInterviewSelect = () => {
   const [companies, setCompanies] = useState([]);
@@ -27,40 +29,55 @@ const AIInterviewSelect = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [companiesResponse, selfIntroResponse, resumesResponse] = await Promise.all([
-        companyAPI.getAll(),
+      const [selfIntroResponse, resumesResponse] = await Promise.all([
         selfIntroductionAPI.getAll(),
         resumeAPI.getAll()
       ]);
 
-      console.log('기업 목록 응답:', companiesResponse);
-      console.log('자기소개서 응답:', selfIntroResponse);
-      console.log('이력서 응답:', resumesResponse);
-
-      if (companiesResponse.success && companiesResponse.data) {
-        setCompanies(companiesResponse.data);
-      } else {
-        console.warn('기업 목록 응답 구조가 예상과 다릅니다:', companiesResponse);
-        setCompanies([]);
+      if (isDevelopment) {
+        console.log('자기소개서 응답:', selfIntroResponse);
+        console.log('이력서 응답:', resumesResponse);
       }
+
+      // 기업 목록을 고정 값으로 설정
+      const FIXED_COMPANIES = [
+        { id: 'baemin', name: '배달의 민족' },
+        { id: 'coupang', name: '쿠팡' },
+        { id: 'naver', name: '네이버' },
+        { id: 'kakao', name: '카카오' }
+      ];
+      setCompanies(FIXED_COMPANIES);
 
       if (selfIntroResponse.success && selfIntroResponse.data) {
         setSelfIntroductions(selfIntroResponse.data);
       } else {
-        console.warn('자기소개서 응답 구조가 예상과 다릅니다:', selfIntroResponse);
+        if (isDevelopment) {
+          console.warn('자기소개서 응답 구조가 예상과 다릅니다:', selfIntroResponse);
+        }
         setSelfIntroductions([]);
       }
 
       if (resumesResponse.success && resumesResponse.data) {
         setResumes(resumesResponse.data);
       } else {
-        console.warn('이력서 응답 구조가 예상과 다릅니다:', resumesResponse);
+        if (isDevelopment) {
+          console.warn('이력서 응답 구조가 예상과 다릅니다:', resumesResponse);
+        }
         setResumes([]);
       }
     } catch (err) {
       setError('데이터를 불러오는데 실패했습니다.');
-      console.error('Error loading data:', err);
-      setCompanies([]);
+      if (isDevelopment) {
+        console.error('Error loading data:', err);
+      }
+      // 오류 시에도 고정 기업 목록 유지
+      const FIXED_COMPANIES = [
+        { id: 'baemin', name: '배달의 민족' },
+        { id: 'coupang', name: '쿠팡' },
+        { id: 'naver', name: '네이버' },
+        { id: 'kakao', name: '카카오' }
+      ];
+      setCompanies(FIXED_COMPANIES);
       setSelfIntroductions([]);
       setResumes([]);
     } finally {
@@ -87,11 +104,24 @@ const AIInterviewSelect = () => {
         resumeId: selectedResume
       };
 
-      console.log('세션 시작 요청:', sessionData);
+      if (isDevelopment) {
+        console.log('세션 시작 요청:', sessionData);
+      }
       const response = await aiInterviewAPI.startSession(sessionData);
-      console.log('세션 시작 응답:', response);
+      if (isDevelopment) {
+        console.log('세션 시작 응답:', response);
+      }
       
       if (response.success && response.thread_id) {
+        // 선택한 기업 정보를 로컬스토리지에 저장하여 면접실에서 사용
+        const selectedCompanyObj = companies.find(c => c.id === selectedCompany) || null;
+        if (selectedCompanyObj) {
+          localStorage.setItem('ai_selected_company_id', selectedCompanyObj.id);
+          localStorage.setItem('ai_selected_company_name', selectedCompanyObj.name);
+        } else {
+          localStorage.removeItem('ai_selected_company_id');
+          localStorage.removeItem('ai_selected_company_name');
+        }
         // 새로운 시스템에서는 thread_id를 받아서 면접실로 이동
         const threadId = response.thread_id;
         navigate(`/ai-interview/room/${threadId}`);
@@ -99,7 +129,9 @@ const AIInterviewSelect = () => {
         throw new Error(response.message || '세션 시작에 실패했습니다.');
       }
     } catch (err) {
-      console.error('Error starting session:', err);
+      if (isDevelopment) {
+        console.error('Error starting session:', err);
+      }
       
       // AxiosError인 경우 더 자세한 에러 정보 제공
       if (err.response) {

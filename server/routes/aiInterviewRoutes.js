@@ -47,6 +47,9 @@ router.post(
 // AI 인터뷰어와의 대화 처리
 router.post("/chat", verifyToken, aiInterviewController.handleChat);
 
+// AI 면접 질문 생성 (5단계 프로세스)
+router.post("/generate-question", verifyToken, aiInterviewController.generateQuestion);
+
 // 오디오 파일 다운로드 (필요시)
 router.get("/audio/:filename", verifyToken, (req, res) => {
   const { filename } = req.params;

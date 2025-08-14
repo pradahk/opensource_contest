@@ -18,17 +18,30 @@ const AIInterviewRoom = () => {
   const [aiAudioUrl, setAiAudioUrl] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
   
+  // 새로운 상태 추가
+  const [interviewStage, setInterviewStage] = useState('self_introduction_request'); // 면접 단계
+  const [questionCount, setQuestionCount] = useState(0); // 질문 카운트
+  const [hasSelfIntroduction, setHasSelfIntroduction] = useState(false); // 자기소개 완료 여부
+  const [isInterviewEnded, setIsInterviewEnded] = useState(false); // 면접 종료 여부
+  
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recognitionRef = useRef(null);
+  const initializationRef = useRef(false);
 
   useEffect(() => {
-    if (sessionId && !isInitialized) {
+    if (sessionId && !isInitialized && !initializationRef.current) {
+      console.log('AI 인터뷰 초기화 시작 - sessionId:', sessionId);
+      initializationRef.current = true;
       setIsInitialized(true);
       initializeSession();
       initializeSpeechRecognition();
     }
-  }, [sessionId, isInitialized]);
+    
+    return () => {
+      initializationRef.current = false;
+    };
+  }, [sessionId]);
 
   const initializeSession = async () => {
     try {
@@ -36,11 +49,12 @@ const AIInterviewRoom = () => {
       setError(null);
       console.log('AI 인터뷰 세션 초기화 시작');
       
-      // AI 인터뷰 세션 시작
+      // AI 인터뷰 세션 시작 (자기소개 요청부터)
       const response = await aiInterviewAPI.startSession({
         userId: localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')).id : null,
-        companyId: sessionId, // sessionId를 companyId로 사용
-        position: '개발자' // 기본값 설정
+        companyId: localStorage.getItem('ai_selected_company_id') || null,
+        position: '개발자',
+        includeInitialQuestion: true
       });
       
       console.log('AI 인터뷰 세션 응답:', response);
@@ -50,8 +64,8 @@ const AIInterviewRoom = () => {
         setThreadId(newThreadId);
         setSession({ id: sessionId, thread_id: newThreadId });
         
-        // 초기 질문 생성 (threadId를 매개변수로 전달)
-        await generateInitialQuestion(newThreadId);
+        // 작업 0: 자기소개 요청으로 시작
+        await requestSelfIntroduction(newThreadId);
       } else {
         throw new Error(response.message || '세션을 초기화할 수 없습니다.');
       }
@@ -71,19 +85,28 @@ const AIInterviewRoom = () => {
     }
   };
 
-  const generateInitialQuestion = async (currentThreadId) => {
+  // 작업 0: 자기소개 요청
+  const requestSelfIntroduction = async (threadId) => {
     try {
-      const response = await aiInterviewAPI.chat('안녕하세요. 면접을 시작해주세요.', currentThreadId);
+      console.log('자기소개 요청 시작');
+      
+      const response = await aiInterviewAPI.generateQuestion({
+        task_type: 'self_introduction_request',
+        company_id: localStorage.getItem('ai_selected_company_id') || null,
+        thread_id: threadId
+      });
       
       if (response.success) {
-        setAiResponse(response.response);
         setCurrentQuestion({
-          question_text: response.response,
-          question_type: '인성',
-          question_number: 1
+          question_text: response.data.question_text,
+          question_type: response.data.question_type,
+          question_number: 0
         });
+        setAiResponse(response.data.question_text);
+        setInterviewStage('self_introduction_request');
+        setQuestionCount(0);
         
-        // AI 음성 재생
+        // AI 음성 설정
         if (response.audioContent) {
           const audioBlob = new Blob(
             [Uint8Array.from(atob(response.audioContent), c => c.charCodeAt(0))],
@@ -91,25 +114,13 @@ const AIInterviewRoom = () => {
           );
           const audioUrl = URL.createObjectURL(audioBlob);
           setAiAudioUrl(audioUrl);
-          
-          const audio = new Audio(audioUrl);
-          audio.play();
         }
       } else {
-        throw new Error(response.error || '초기 질문을 생성하는데 실패했습니다.');
+        throw new Error(response.error || '자기소개 요청에 실패했습니다.');
       }
     } catch (err) {
-      console.error('Error generating initial question:', err);
-      
-      // 더 구체적인 오류 메시지 제공
-      if (err.response) {
-        const errorMessage = err.response.data?.error || err.response.data?.message || '서버 오류가 발생했습니다.';
-        setError(`초기 질문 생성 실패: ${errorMessage}`);
-      } else if (err.request) {
-        setError('서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.');
-      } else {
-        setError(`초기 질문을 생성하는데 실패했습니다: ${err.message}`);
-      }
+      console.error('자기소개 요청 오류:', err);
+      setError('자기소개 요청에 실패했습니다.');
     }
   };
 
@@ -165,7 +176,6 @@ const AIInterviewRoom = () => {
       setIsRecording(true);
       setTranscription('');
       
-      // 음성 인식 시작
       if (recognitionRef.current) {
         recognitionRef.current.start();
       }
@@ -180,7 +190,6 @@ const AIInterviewRoom = () => {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       
-      // 음성 인식 중지
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
@@ -194,7 +203,8 @@ const AIInterviewRoom = () => {
 
       console.log('=== 답변 처리 시작 ===');
       console.log('Thread ID:', threadId);
-      console.log('오디오 Blob 크기:', audioBlob.size, 'bytes');
+      console.log('현재 면접 단계:', interviewStage);
+      console.log('질문 카운트:', questionCount);
 
       // 음성 인식 (STT)
       console.log('음성 인식 요청 중...');
@@ -210,50 +220,25 @@ const AIInterviewRoom = () => {
       console.log('사용자 응답:', userTranscription);
       setTranscription(userTranscription);
 
-      // AI와 대화
-      console.log('AI 채팅 요청 중...');
-      const chatResponse = await aiInterviewAPI.chat(userTranscription, threadId);
-      console.log('AI 채팅 응답:', chatResponse);
-      
-      if (chatResponse.success) {
-        console.log('=== AI 응답 ===');
-        console.log('AI 응답:', chatResponse.response);
-        setAiResponse(chatResponse.response);
-        
-        // AI 음성 재생
-        if (chatResponse.audioContent) {
-          console.log('AI 음성 재생 시작...');
-          const audioBlob = new Blob(
-            [Uint8Array.from(atob(chatResponse.audioContent), c => c.charCodeAt(0))],
-            { type: 'audio/mp3' }
-          );
-          const audioUrl = URL.createObjectURL(audioBlob);
-          setAiAudioUrl(audioUrl);
-          
-          const audio = new Audio(audioUrl);
-          audio.play().catch(audioError => {
-            console.error('AI 음성 재생 실패:', audioError);
-          });
-        }
-
-        // 다음 질문으로 업데이트 (question_text만 사용)
-        setCurrentQuestion({
-          question_text: chatResponse.response,
-          question_type: 'AI 질문',
-          question_number: (currentQuestion?.question_number || 0) + 1
-        });
-        
-        console.log('=== 답변 처리 완료 ===');
+      // 면접 단계에 따른 처리
+      if (interviewStage === 'self_introduction_request') {
+        // 자기소개 완료 후 첫 번째 질문으로
+        setHasSelfIntroduction(true);
+        setInterviewStage('initial_question');
+        setQuestionCount(1);
+        await generateNextQuestion(userTranscription, 'initial_question');
       } else {
-        throw new Error(chatResponse.error || 'AI 응답을 받는데 실패했습니다.');
+        // 일반적인 답변 처리
+        await generateNextQuestion(userTranscription, 'follow_up_or_next_question');
       }
+      
+      console.log('=== 답변 처리 완료 ===');
     } catch (err) {
       console.error('=== 답변 처리 오류 ===');
       console.error('오류 타입:', err.constructor.name);
       console.error('오류 메시지:', err.message);
       console.error('오류 스택:', err.stack);
       
-      // 더 구체적인 오류 메시지 제공
       if (err.response) {
         console.error('응답 상태:', err.response.status);
         console.error('응답 데이터:', err.response.data);
@@ -270,11 +255,80 @@ const AIInterviewRoom = () => {
     }
   };
 
+  // 다음 질문 생성
+  const generateNextQuestion = async (transcription, taskType) => {
+    try {
+      console.log('다음 질문 생성 시작:', { taskType, questionCount });
+      
+      const response = await aiInterviewAPI.generateQuestion({
+        task_type: taskType,
+        company_id: localStorage.getItem('ai_selected_company_id') || null,
+        question_text: currentQuestion?.question_text || '',
+        transcription: transcription,
+        thread_id: threadId,
+        current_question_count: questionCount
+      });
+      
+      if (response.success) {
+        // 면접 종료 확인
+        if (response.data.is_end) {
+          setIsInterviewEnded(true);
+          setCurrentQuestion({
+            question_text: response.data.question_text,
+            question_type: response.data.question_type,
+            question_number: questionCount
+          });
+          setAiResponse(response.data.question_text);
+          
+          // 3초 후 면접 종료
+          setTimeout(() => {
+            handleEndInterview();
+          }, 3000);
+          return;
+        }
+        
+        // 다음 질문으로 업데이트
+        const nextQuestionCount = questionCount + 1;
+        setQuestionCount(nextQuestionCount);
+        setCurrentQuestion({
+          question_text: response.data.question_text,
+          question_type: response.data.question_type,
+          question_number: nextQuestionCount
+        });
+        setAiResponse(response.data.question_text);
+        
+        // AI 음성 설정
+        if (response.audioContent) {
+          const audioBlob = new Blob(
+            [Uint8Array.from(atob(response.audioContent), c => c.charCodeAt(0))],
+            { type: 'audio/mp3' }
+          );
+          const audioUrl = URL.createObjectURL(audioBlob);
+          setAiAudioUrl(audioUrl);
+        }
+        
+        // 면접 단계 업데이트
+        if (taskType === 'initial_question') {
+          setInterviewStage('follow_up_or_next_question');
+        }
+      } else {
+        throw new Error(response.error || '다음 질문 생성에 실패했습니다.');
+      }
+    } catch (err) {
+      console.error('다음 질문 생성 오류:', err);
+      setError('다음 질문을 생성하는데 실패했습니다.');
+    }
+  };
+
   const handleEndInterview = async () => {
     if (window.confirm('면접을 종료하시겠습니까?')) {
       try {
         await aiInterviewAPI.endSession(threadId);
-        navigate('/ai-interview');
+        // 면접 종료 후 피드백 페이지로 이동
+        // 선택한 기업 정보 정리
+        localStorage.removeItem('ai_selected_company_id');
+        localStorage.removeItem('ai_selected_company_name');
+        navigate('/ai-interview-feedback');
       } catch (err) {
         setError('면접을 종료하는데 실패했습니다.');
         console.error('Error ending session:', err);
@@ -309,13 +363,18 @@ const AIInterviewRoom = () => {
     <div className="ai-interview-room-container">
       <div className="interview-header">
         <div className="company-info">
-          <h2>{session?.company?.name || '기업명 없음'}</h2>
+          <h2>{localStorage.getItem('ai_selected_company_name') || '기업명 없음'}</h2>
           <p>AI 면접 진행 중</p>
         </div>
         
         <div className="session-info">
           <span className="question-counter">
-            {session?.current_question_number || 0} / {session?.total_questions || 0}
+            {questionCount} / {isInterviewEnded ? questionCount : '진행중'}
+          </span>
+          <span className="interview-stage">
+            {interviewStage === 'self_introduction_request' ? '자기소개 요청' :
+             interviewStage === 'initial_question' ? '초기 질문' :
+             interviewStage === 'follow_up_or_next_question' ? '심화/다음 질문' : '진행중'}
           </span>
         </div>
 
@@ -335,7 +394,9 @@ const AIInterviewRoom = () => {
             <div className="question-card">
               <div className="question-header">
                 <span className="question-type">{currentQuestion.question_type}</span>
-                <span className="question-number">질문 {currentQuestion.question_number}</span>
+                <span className="question-number">
+                  {interviewStage === 'self_introduction_request' ? '자기소개 요청' : `질문 ${currentQuestion.question_number}`}
+                </span>
               </div>
               <h3 className="question-text">{currentQuestion.question_text}</h3>
             </div>
@@ -403,6 +464,9 @@ const AIInterviewRoom = () => {
           <li>구체적인 경험과 예시를 들어 설명하세요.</li>
           <li>답변 후 "답변 완료" 버튼을 눌러주세요.</li>
           <li>면접 중 언제든지 일시정지할 수 있습니다.</li>
+          {interviewStage === 'self_introduction_request' && (
+            <li>먼저 간단한 자기소개를 해주세요.</li>
+          )}
         </ul>
       </div>
     </div>
