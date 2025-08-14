@@ -181,10 +181,7 @@ const createTables = async (pool) => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         session_id INT UNIQUE NOT NULL,
         total_score DECIMAL(3,2),
-        strengths TEXT,
-        weaknesses TEXT,
-        suggestions TEXT,
-        report_json JSON,
+        report TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (session_id) REFERENCES interview_sessions(id) ON DELETE CASCADE
       )
