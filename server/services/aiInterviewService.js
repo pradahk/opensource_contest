@@ -274,7 +274,7 @@ async function requestSelfIntroduction(userData) {
     const parsed = safeParseAssistantResponse(result.response, "인성");
     return {
       success: true,
-      data: parsed,
+      data: { ...parsed, is_follow_up: false },
       thread_id: result.thread_id,
     };
   } catch (error) {
@@ -351,7 +351,7 @@ async function generateInitialQuestion(userData, threadId = null) {
     const parsed = safeParseAssistantResponse(result.response, "경험");
     return {
       success: true,
-      data: parsed,
+      data: { ...parsed, is_follow_up: false },
       thread_id: result.thread_id,
     };
   } catch (error) {
@@ -409,7 +409,7 @@ async function generateFollowUpQuestion(userData, threadId = null) {
     const parsed = safeParseAssistantResponse(result.response, "기타");
     return {
       success: true,
-      data: parsed,
+      data: { ...parsed, is_follow_up: true },
       thread_id: result.thread_id,
     };
   } catch (error) {
@@ -469,7 +469,7 @@ async function generateNextQuestion(userData, threadId = null) {
     const parsed = safeParseAssistantResponse(result.response, "기타");
     return {
       success: true,
-      data: parsed,
+      data: { ...parsed, is_follow_up: false },
       thread_id: result.thread_id,
     };
   } catch (error) {
@@ -545,6 +545,7 @@ async function generateQuestion(userData, threadId = null) {
       self_introduction_id,
       resume_id,
       current_question_count = 0,
+      follow_up_count = 0,
     } = userData;
 
     console.log("질문 생성 시작:", { task_type, current_question_count });
@@ -569,11 +570,18 @@ async function generateQuestion(userData, threadId = null) {
     }
 
     // 작업 2: 심화/꼬리 질문 생성 (답변이 간결하거나 모호한 경우)
-    if (
+    const MAX_FOLLOW_UPS = Number(process.env.MAX_FOLLOW_UPS || 2);
+    const MIN_LENGTH_FOR_DETAILED = Number(
+      process.env.MIN_TRANSCRIPT_LEN || 100
+    );
+    const isShortAnswer = !!(
+      transcription && transcription.length < MIN_LENGTH_FOR_DETAILED
+    );
+    const shouldFollowUp =
       task_type === "follow_up_question" ||
-      (transcription && transcription.length < 100)
-    ) {
-      // 간결한 답변 감지
+      (isShortAnswer && follow_up_count < MAX_FOLLOW_UPS);
+
+    if (shouldFollowUp) {
       return await generateFollowUpQuestion(userData, threadId);
     }
 

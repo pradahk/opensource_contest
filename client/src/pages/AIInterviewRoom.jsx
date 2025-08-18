@@ -17,10 +17,13 @@ const AIInterviewRoom = () => {
   const [aiResponse, setAiResponse] = useState('');
   const [aiAudioUrl, setAiAudioUrl] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [interviewLog, setInterviewLog] = useState([]);
+  const recordStartedAtRef = useRef(null);
   
   // 새로운 상태 추가
   const [interviewStage, setInterviewStage] = useState('self_introduction_request'); // 면접 단계
   const [questionCount, setQuestionCount] = useState(0); // 질문 카운트
+  const [followUpCount, setFollowUpCount] = useState(0); // 꼬리질문 카운트
   const [hasSelfIntroduction, setHasSelfIntroduction] = useState(false); // 자기소개 완료 여부
   const [isInterviewEnded, setIsInterviewEnded] = useState(false); // 면접 종료 여부
   
@@ -173,6 +176,7 @@ const AIInterviewRoom = () => {
       };
 
       mediaRecorderRef.current.start();
+      recordStartedAtRef.current = Date.now();
       setIsRecording(true);
       setTranscription('');
       
@@ -189,6 +193,7 @@ const AIInterviewRoom = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      
       
       if (recognitionRef.current) {
         recognitionRef.current.stop();
@@ -219,6 +224,33 @@ const AIInterviewRoom = () => {
       console.log('=== 사용자 음성 인식 결과 ===');
       console.log('사용자 응답:', userTranscription);
       setTranscription(userTranscription);
+
+      // 간이 음성 지표 계산
+      const startedAt = recordStartedAtRef.current || Date.now();
+      const durationMs = Math.max(1, Date.now() - startedAt);
+      const durationMin = durationMs / 60000;
+      const words = (userTranscription || '').trim().split(/\s+/).filter(Boolean).length;
+      const speedWpm = Math.max(1, Math.round(words / (durationMin || 1)));
+      const fillerCount = (userTranscription.match(/\b(음|어|그|음...|어..|그..|uh|um)\b/g) || []).length;
+      const senseVoice = {
+        pronunciation_score: null,
+        emotion: 'neutral',
+        speed_wpm: speedWpm,
+        filler_count: fillerCount,
+        pitch_variation: null,
+      };
+
+      // 로그에 기록 (질문/답변/음성지표)
+      if (currentQuestion?.question_text) {
+        setInterviewLog(prev => ([
+          ...prev,
+          {
+            question_text: currentQuestion.question_text,
+            transcription: userTranscription,
+            sense_voice_analysis: senseVoice,
+          }
+        ]));
+      }
 
       // 면접 단계에 따른 처리
       if (interviewStage === 'self_introduction_request') {
@@ -266,7 +298,8 @@ const AIInterviewRoom = () => {
         question_text: currentQuestion?.question_text || '',
         transcription: transcription,
         thread_id: threadId,
-        current_question_count: questionCount
+        current_question_count: questionCount,
+        follow_up_count: followUpCount
       });
       
       if (response.success) {
@@ -283,10 +316,17 @@ const AIInterviewRoom = () => {
           // 3초 후 면접 종료
           setTimeout(() => {
             handleEndInterview();
-          }, 3000);
+          }, 2000);
           return;
         }
         
+        // 꼬리질문 횟수 업데이트
+        if (response.data.is_follow_up) {
+          setFollowUpCount((c) => c + 1);
+        } else {
+          setFollowUpCount(0);
+        }
+
         // 다음 질문으로 업데이트
         const nextQuestionCount = questionCount + 1;
         setQuestionCount(nextQuestionCount);
@@ -328,7 +368,15 @@ const AIInterviewRoom = () => {
         // 선택한 기업 정보 정리
         localStorage.removeItem('ai_selected_company_id');
         localStorage.removeItem('ai_selected_company_name');
-        navigate('/ai-interview-feedback');
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        const user_info = { name: user?.nickname || user?.name || '사용자' };
+        navigate('/ai-interview/final-report', {
+          state: {
+            user_info,
+            interview_data_log: interviewLog,
+          }
+        });
       } catch (err) {
         setError('면접을 종료하는데 실패했습니다.');
         console.error('Error ending session:', err);

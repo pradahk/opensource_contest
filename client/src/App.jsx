@@ -77,6 +77,11 @@ function App() {
           <AIInterviewFeedback />
         </ProtectedRoute>
       } />
+      <Route path="/ai-interview/final-report" element={
+        <ProtectedRoute>
+          <FinalReport />
+        </ProtectedRoute>
+      } />
       
       {/* 문서 수정 라우트들 */}
       <Route path="/edit-intro/:id" element={

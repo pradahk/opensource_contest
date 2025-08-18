@@ -302,6 +302,12 @@ export const reportAPI = {
     const response = await api.get("/reports/user/stats");
     return response.data;
   },
+
+  // AI 최종 마크다운 생성 (세션 저장 없이 즉시 생성)
+  generateMarkdown: async (payload) => {
+    const response = await api.post("/reports/generate/markdown", payload);
+    return response.data;
+  },
 };
 
 // 자기소개서 관련 API
