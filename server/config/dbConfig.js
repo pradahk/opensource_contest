@@ -170,7 +170,6 @@ const createTables = async (pool) => {
         emotion VARCHAR(50),
         speed_wpm INT,
         filler_count INT,
-        pitch_variation DECIMAL(5,2),
         FOREIGN KEY (answer_id) REFERENCES user_answers(id) ON DELETE CASCADE
       )
     `);
