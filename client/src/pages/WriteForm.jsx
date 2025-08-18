@@ -68,72 +68,64 @@ const WriteForm = () => {
 
   return (
     <Layout>
-      <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f6f7fb', padding: '32px 0' }}>
-        <div style={{ width: '100%', maxWidth: 480, background: '#fff', borderRadius: 22, boxShadow: '0 8px 32px 0 rgba(24,26,27,0.13)', padding: '48px 32px 40px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'box-shadow 0.2s', minHeight: 520 }}>
-          {/* 탭 */}
-          <div style={{ display: 'flex', width: '100%', marginBottom: 36, background: '#f1f3f7', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px #0001' }}>
-            <button onClick={() => handleTab('intro')} style={{ flex: 1, padding: '16px 0', fontSize: 18, fontWeight: 800, border: 'none', background: tab === 'intro' ? '#181A1B' : 'transparent', color: tab === 'intro' ? '#fff' : '#888', cursor: 'pointer', transition: 'all 0.2s', letterSpacing: 1, outline: 'none' }}>자기소개서</button>
-            <button onClick={() => handleTab('resume')} style={{ flex: 1, padding: '16px 0', fontSize: 18, fontWeight: 800, border: 'none', background: tab === 'resume' ? '#181A1B' : 'transparent', color: tab === 'resume' ? '#fff' : '#888', cursor: 'pointer', transition: 'all 0.2s', letterSpacing: 1, outline: 'none' }}>이력서</button>
+      <div className="container">
+        <div className="card animate-fade-in" style={{ maxWidth: 720, margin: '0 auto' }}>
+          <div className="text-center mb-4">
+            <h2 className="gradient-text" style={{ fontSize: '28px', fontWeight: 900 }}>
+              {tab === 'intro' ? '자기소개서 작성' : '이력서 작성'}
+            </h2>
+            <p style={{ color: '#6b7280', fontWeight: 600 }}>문서를 저장하면 대시보드에서 관리할 수 있습니다.</p>
           </div>
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-            <label style={{ fontWeight: 700, marginBottom: 8, color: '#181A1B', fontSize: 16, letterSpacing: 0.5 }}>제목</label>
-            <input 
-              type="text" 
-              value={title} 
-              onChange={e => setTitle(e.target.value)} 
-              required 
-              placeholder={tabInfo[tab].titlePlaceholder} 
-              style={{ padding: '15px 14px', borderRadius: 10, border: '1.5px solid #d1d5db', marginBottom: 22, fontSize: 16, outline: 'none', background: '#f9fafb', color: '#181A1B', boxSizing: 'border-box', transition: 'border 0.2s', fontWeight: 500 }} 
-              onFocus={e => e.target.style.border = '1.5px solid #181A1B'} 
-              onBlur={e => e.target.style.border = '1.5px solid #d1d5db'} 
-              disabled={isLoading}
-            />
-            <label style={{ fontWeight: 700, marginBottom: 8, color: '#181A1B', fontSize: 16, letterSpacing: 0.5 }}>{tabInfo[tab].label} 내용</label>
-            <textarea 
-              value={content} 
-              onChange={e => setContent(e.target.value)} 
-              required 
-              placeholder={tabInfo[tab].contentPlaceholder} 
-              rows={8} 
-              style={{ padding: '15px 14px', borderRadius: 10, border: '1.5px solid #d1d5db', marginBottom: 28, fontSize: 16, outline: 'none', background: '#f9fafb', color: '#181A1B', boxSizing: 'border-box', resize: 'vertical', transition: 'border 0.2s', fontWeight: 500 }} 
-              onFocus={e => e.target.style.border = '1.5px solid #181A1B'} 
-              onBlur={e => e.target.style.border = '1.5px solid #d1d5db'} 
-              disabled={isLoading}
-            />
-            <button 
-              type="submit" 
-              disabled={isLoading}
-              style={{ 
-                padding: '16px 0', 
-                fontSize: 19, 
-                borderRadius: 10, 
-                background: isLoading ? '#ccc' : 'linear-gradient(90deg, #181A1B 0%, #23272f 100%)', 
-                color: '#fff', 
-                fontWeight: 900, 
-                letterSpacing: 1, 
-                border: 'none', 
-                boxShadow: '0 2px 12px #181A1B22', 
-                cursor: isLoading ? 'not-allowed' : 'pointer', 
-                marginTop: 4, 
-                transition: 'all 0.2s' 
-              }} 
-              onMouseOver={e => {
-                if (!isLoading) {
-                  e.target.style.background='#fff';
-                  e.target.style.color='#181A1B';
-                  e.target.style.border='2px solid #181A1B';
-                }
-              }} 
-              onMouseOut={e => {
-                if (!isLoading) {
-                  e.target.style.background='linear-gradient(90deg, #181A1B 0%, #23272f 100%)';
-                  e.target.style.color='#fff';
-                  e.target.style.border='none';
-                }
-              }}
+
+          <div className="d-flex gap-2 mb-4" style={{ justifyContent: 'center' }}>
+            <button
+              type="button"
+              className={`btn-secondary ${tab === 'intro' ? 'gradient-text' : ''}`}
+              onClick={() => handleTab('intro')}
             >
-              {isLoading ? '저장 중...' : '저장'}
+              자기소개서
             </button>
+            <button
+              type="button"
+              className={`btn-secondary ${tab === 'resume' ? 'gradient-text' : ''}`}
+              onClick={() => handleTab('resume')}
+            >
+              이력서
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label className="form-label">제목</label>
+              <input
+                type="text"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                required
+                className="form-input"
+                placeholder={tabInfo[tab].titlePlaceholder}
+                disabled={isLoading}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{tabInfo[tab].label} 내용</label>
+              <textarea
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                required
+                className="form-input"
+                placeholder={tabInfo[tab].contentPlaceholder}
+                rows={10}
+                disabled={isLoading}
+              />
+            </div>
+
+            <div className="d-flex justify-center">
+              <button type="submit" className="btn-primary hover-lift" disabled={isLoading}>
+                {isLoading ? '저장 중...' : '저장'}
+              </button>
+            </div>
           </form>
         </div>
       </div>

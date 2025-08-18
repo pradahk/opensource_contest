@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
 import Layout from '../components/Layout';
 import { reportAPI, userStatsAPI } from '../services/api';
 
@@ -11,6 +14,9 @@ const FinalReport = () => {
   const [reportData, setReportData] = useState(null);
   const [userStats, setUserStats] = useState(null);
   const [markdown, setMarkdown] = useState('');
+  const [reports, setReports] = useState([]);
+  const [selectedReportId, setSelectedReportId] = useState(null);
+  const [viewMode, setViewMode] = useState('preview'); // 'preview' or 'markdown'
 
   useEffect(() => {
     // 페이지 로드 시 사용자 통계 정보 가져오기
@@ -40,11 +46,13 @@ const FinalReport = () => {
           const resp = await reportAPI.generateMarkdown(payload);
           if (resp.success) {
             setMarkdown(resp.data.markdown || '');
-            // 저장 성공 시 알림
-            if (resp.data.saved && resp.data.report_id) {
-              console.log('Report saved:', resp.data.report_id);
-            }
             setShow(true);
+            try {
+              const listResp = await reportAPI.getUserReports();
+              setReportData(listResp.data);
+              setReports(listResp.data || []);
+              setSelectedReportId(resp.data.report_id || null);
+            } catch {}
           }
         } catch (e) {
           console.error('자동 마크다운 생성 오류:', e);
@@ -88,10 +96,38 @@ const FinalReport = () => {
       // 사용자의 모든 리포트 조회
       const response = await reportAPI.getUserReports();
       setReportData(response.data);
+      const list = response.data || [];
+      setReports(list);
       setShow(true);
+      if (list.length > 0) {
+        // 최신 보고서 자동 로드
+        await handleSelectReport(list[0].id);
+      } else {
+        setMarkdown('');
+        setSelectedReportId(null);
+      }
     } catch (error) {
       console.error('보고서 조회 오류:', error);
       alert('보고서 조회 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelectReport = async (reportId) => {
+    try {
+      setIsLoading(true);
+      setSelectedReportId(reportId);
+      const resp = await reportAPI.getReport(reportId);
+      if (resp.success && resp.data) {
+        const payload = typeof resp.data.report_json === 'string' ? JSON.parse(resp.data.report_json) : resp.data.report_json;
+        setMarkdown(payload?.markdown || '');
+      } else {
+        alert('보고서를 불러오지 못했습니다.');
+      }
+    } catch (e) {
+      console.error('보고서 로드 오류:', e);
+      alert('보고서 로드 중 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -165,84 +201,225 @@ const FinalReport = () => {
 
   return (
     <Layout>
-      <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f6f7fb', padding: '32px 0' }}>
-        <div style={{ width: '100%', maxWidth: 480, background: '#fff', borderRadius: 22, boxShadow: '0 8px 32px 0 rgba(24,26,27,0.13)', padding: '48px 32px 40px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <h2 style={{ fontSize: 28, fontWeight: 900, color: '#181A1B', marginBottom: 30, letterSpacing: 1 }}>최종 피드백 보고서</h2>
-          
-          {/* 사용자 통계 정보 */}
-          {userStats && (
-            <div style={{ width: '100%', background: '#f0f8ff', borderRadius: 14, padding: '20px 18px', marginBottom: 24, boxShadow: '0 1px 8px #0001', color: '#181A1B', fontSize: 16, fontWeight: 500, textAlign: 'left' }}>
-              <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 10, color: '#1976d2' }}>내 활동 현황</div>
-              <div>총 면접 참여: <b>{userStats.interviews}회</b></div>
-              <div>자기소개서 작성: <b>{userStats.intros}건</b></div>
-              <div>이력서 작성: <b>{userStats.resumes}건</b></div>
-              <div>관심기업 등록: <b>{userStats.companies}개</b></div>
+      <div>
+        <div className="container">
+          <div className="card animate-fade-in">
+            <div className="text-center mb-4">
+              <h1 className="gradient-text" style={{ fontSize: '36px', fontWeight: 900, marginBottom: '8px' }}>
+                📊 최종 피드백 보고서
+              </h1>
+              <p style={{ color: '#6b7280', fontSize: '18px', fontWeight: 500 }}>
+                AI 면접 결과를 종합적으로 분석한 상세 보고서입니다
+              </p>
             </div>
-          )}
-
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 18, marginBottom: 24 }}>
-            <label style={{ fontWeight: 700, color: '#181A1B', marginBottom: 4 }}>조회 기간</label>
-            <select 
-              value={period} 
-              onChange={e => setPeriod(e.target.value)} 
-              style={{ padding: '12px', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: 16, background: '#f9fafb', color: '#181A1B', fontWeight: 500, outline: 'none', marginBottom: 8 }}
-              disabled={isLoading}
-            >
-              <option value="all">전체</option>
-              <option value="1week">최근 1주</option>
-              <option value="1month">최근 1개월</option>
-              <option value="3month">최근 3개월</option>
-            </select>
-            <button 
-              type="submit" 
-              disabled={isLoading}
-              style={{ 
-                padding: '13px 0', 
-                fontSize: 17, 
-                borderRadius: 8, 
-                background: isLoading ? '#ccc' : '#181A1B', 
-                color: '#fff', 
-                fontWeight: 800, 
-                border: 'none', 
-                cursor: isLoading ? 'not-allowed' : 'pointer', 
-                transition: 'all 0.2s' 
-              }}
-            >
-              {isLoading ? '조회 중...' : '조회'}
-            </button>
-          </form>
-          
-          {show && stats && (
-            <div style={{ width: '100%', background: '#f9fafb', borderRadius: 12, padding: '24px 18px', boxShadow: '0 1px 8px #0001', color: '#181A1B', fontSize: 16, fontWeight: 500, textAlign: 'left' }}>
-              <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 10 }}>누적 보고서</div>
-              <div>총 면접 횟수: <b>{stats.totalSessions}회</b></div>
-              <div>평균 점수: <b>{stats.averageScore}점</b></div>
-              <div>가장 많이 틀린 질문: <b>{stats.mostCommonWeakness}</b></div>
-              <div style={{ marginTop: 12 }}>
-                AI 피드백: <span style={{ color: '#1976d2', fontWeight: 700 }}>
-                  {stats.averageScore >= 80 ? '훌륭한 성과입니다! 계속해서 연습하세요.' :
-                   stats.averageScore >= 60 ? '좋은 성과입니다. 약점을 보완하면 더 좋은 결과를 얻을 수 있습니다.' :
-                   '더 많은 연습이 필요합니다. 기본기를 탄탄히 다지고 다시 도전해보세요.'}
-                </span>
+            
+            {/* 사용자 통계 정보 */}
+            {userStats && (
+              <div className="card glass mb-4 animate-slide-in-left">
+                <h3 className="gradient-text-secondary" style={{ fontSize: '24px', fontWeight: 800, marginBottom: '16px' }}>
+                  📈 내 활동 현황
+                </h3>
+                <div className="d-flex" style={{ gap: '16px', overflowX: 'auto', paddingBottom: '8px' }}>
+                  <div className="text-center p-3 glass-dark rounded-xl" style={{ minWidth: '200px' }}>
+                    <div style={{ fontSize: '32px', fontWeight: 900, color: '#667eea', marginBottom: '8px' }}>
+                      {userStats.interviews}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: 600 }}>면접 참여</div>
+                  </div>
+                  <div className="text-center p-3 glass-dark rounded-xl" style={{ minWidth: '200px' }}>
+                    <div style={{ fontSize: '32px', fontWeight: 900, color: '#4ecdc4', marginBottom: '8px' }}>
+                      {userStats.intros}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: 600 }}>자기소개서</div>
+                  </div>
+                  <div className="text-center p-3 glass-dark rounded-xl" style={{ minWidth: '200px' }}>
+                    <div style={{ fontSize: '32px', fontWeight: 900, color: '#764ba2', marginBottom: '8px' }}>
+                      {userStats.resumes}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: 600 }}>이력서</div>
+                  </div>
+                  <div className="text-center p-3 glass-dark rounded-xl" style={{ minWidth: '200px' }}>
+                    <div style={{ fontSize: '32px', fontWeight: 900, color: '#ff6b6b', marginBottom: '8px' }}>
+                      {userStats.companies}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: 600 }}>관심기업</div>
+                  </div>
+                </div>
               </div>
-              <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-                <button onClick={handleGenerateMarkdown} style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontWeight: 700 }}>최종 마크다운 생성</button>
+            )}
+
+            {/* 조회 폼 */}
+            <div className="card glass mb-4 animate-slide-in-right">
+              <form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
+                <div>
+                  <label className="form-label">📅 조회 기간</label>
+                  <select 
+                    value={period} 
+                    onChange={e => setPeriod(e.target.value)} 
+                    className="form-input"
+                    disabled={isLoading}
+                  >
+                    <option value="all">전체 기간</option>
+                    <option value="1week">최근 1주</option>
+                    <option value="1month">최근 1개월</option>
+                    <option value="3month">최근 3개월</option>
+                  </select>
+                </div>
+                <button 
+                  type="submit" 
+                  className="btn-primary hover-lift"
+                  disabled={isLoading}
+                >
+                  {isLoading ? '🔄 조회 중...' : '🔍 보고서 조회'}
+                </button>
+              </form>
+            </div>
+            
+            {/* 통계 요약 */}
+            {show && stats && (
+              <div className="card glass mb-4 animate-fade-in">
+                <h3 className="gradient-text" style={{ fontSize: '24px', fontWeight: 800, marginBottom: '20px' }}>
+                  📊 누적 성과 분석
+                </h3>
+                <div className="d-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
+                  <div className="text-center p-3 glass-dark rounded-xl">
+                    <div style={{ fontSize: '28px', fontWeight: 900, color: '#667eea', marginBottom: '8px' }}>
+                      {stats.totalSessions}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: 600 }}>총 면접 횟수</div>
+                  </div>
+                  <div className="text-center p-3 glass-dark rounded-xl">
+                    <div style={{ fontSize: '28px', fontWeight: 900, color: '#4ecdc4', marginBottom: '8px' }}>
+                      {stats.averageScore}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: 600 }}>평균 점수</div>
+                  </div>
+                  <div className="text-center p-3 glass-dark rounded-xl">
+                    <div style={{ fontSize: '28px', fontWeight: 900, color: '#ff6b6b', marginBottom: '8px' }}>
+                      {stats.mostCommonWeakness}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: 600 }}>주요 개선점</div>
+                  </div>
+                </div>
+                <div className="mt-3 p-3 glass-dark rounded-xl">
+                  <div style={{ fontSize: '16px', fontWeight: 600, color: '#374151' }}>
+                    💡 AI 피드백: <span className="gradient-text-secondary" style={{ fontWeight: 700 }}>
+                      {stats.averageScore >= 80 ? '훌륭한 성과입니다! 계속해서 연습하세요.' :
+                       stats.averageScore >= 60 ? '좋은 성과입니다. 약점을 보완하면 더 좋은 결과를 얻을 수 있습니다.' :
+                       '더 많은 연습이 필요합니다. 기본기를 탄탄히 다지고 다시 도전해보세요.'}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {show && !stats && (
-            <div style={{ width: '100%', background: '#fff3cd', borderRadius: 12, padding: '24px 18px', boxShadow: '0 1px 8px #0001', color: '#856404', fontSize: 16, fontWeight: 500, textAlign: 'center' }}>
-              아직 면접 기록이 없습니다. AI 면접을 먼저 진행해보세요!
-            </div>
-          )}
+            {show && !stats && (
+              <div className="card glass mb-4 animate-fade-in">
+                <div className="text-center p-4">
+                  <div style={{ fontSize: '48px', marginBottom: '16px' }}>📝</div>
+                  <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
+                    아직 면접 기록이 없습니다
+                  </h3>
+                  <p style={{ color: '#6b7280', fontSize: '16px' }}>
+                    AI 면접을 먼저 진행해보세요!
+                  </p>
+                </div>
+              </div>
+            )}
 
-          {markdown && (
-            <div style={{ width: '100%', background: '#ffffff', borderRadius: 12, padding: '24px 18px', boxShadow: '0 1px 8px #0001', color: '#111827', fontSize: 14, fontWeight: 500, textAlign: 'left', marginTop: 16 }}>
-              <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 10 }}>최종 마크다운 보고서 (미리보기)</div>
-              <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{markdown}</pre>
-            </div>
-          )}
+            {/* 보고서 목록 */}
+            {reports && reports.length > 0 && (
+              <div className="card glass mb-4 animate-fade-in">
+                <h3 className="gradient-text" style={{ fontSize: '24px', fontWeight: 800, marginBottom: '20px' }}>
+                  📋 보고서 목록
+                </h3>
+                <div className="d-flex flex-column gap-3">
+                  {reports.map((r) => (
+                    <div key={r.id} className="d-flex justify-between align-center p-3 glass-dark rounded-xl hover-lift">
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '16px', color: '#1a1a1a' }}>
+                          {r.company_name || '일반 면접'}
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
+                          {new Date(r.created_at).toLocaleString('ko-KR')}
+                        </div>
+                      </div>
+                      <div className="d-flex align-center gap-3">
+                        <span className="p-2 glass rounded-lg" style={{ fontSize: '14px', color: '#374151', fontWeight: 600 }}>
+                          점수: {r.total_score ?? '-'}
+                        </span>
+                        <button 
+                          onClick={() => handleSelectReport(r.id)} 
+                          className={`btn-secondary hover-scale ${selectedReportId === r.id ? 'gradient-text' : ''}`}
+                          style={{ padding: '8px 16px', fontSize: '14px' }}
+                        >
+                          {selectedReportId === r.id ? '✅ 선택됨' : '👁️ 보기'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 마크다운 보고서 */}
+            {markdown && (
+              <div className="card animate-fade-in">
+                <div className="d-flex justify-between align-center mb-4">
+                  <h3 className="gradient-text" style={{ fontSize: '24px', fontWeight: 800 }}>
+                    📄 최종 마크다운 보고서
+                  </h3>
+                  <div className="d-flex gap-2">
+                    <button 
+                      onClick={() => setViewMode('preview')}
+                      className={`btn-secondary ${viewMode === 'preview' ? 'gradient-text' : ''}`}
+                      style={{ padding: '8px 16px', fontSize: '14px' }}
+                    >
+                      👁️ 미리보기
+                    </button>
+                    <button 
+                      onClick={() => setViewMode('markdown')}
+                      className={`btn-secondary ${viewMode === 'markdown' ? 'gradient-text' : ''}`}
+                      style={{ padding: '8px 16px', fontSize: '14px' }}
+                    >
+                      📝 마크다운
+                    </button>
+                  </div>
+                </div>
+                
+                {viewMode === 'preview' ? (
+                  <div className="markdown-content">
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeHighlight]}
+                    >
+                      {markdown}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <div className="p-4 glass-dark rounded-xl">
+                    <pre style={{ 
+                      whiteSpace: 'pre-wrap', 
+                      wordBreak: 'break-word',
+                      fontSize: '14px',
+                      lineHeight: '1.6',
+                      color: '#e2e8f0',
+                      fontFamily: 'Fira Code, Monaco, Consolas, monospace'
+                    }}>
+                      {markdown}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 로딩 스피너 */}
+            {isLoading && (
+              <div className="loading">
+                <div className="loading-spinner"></div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </Layout>

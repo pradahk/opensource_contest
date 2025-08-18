@@ -2,7 +2,12 @@ const Report = require("../models/Report");
 const InterviewSession = require("../models/InterviewSession");
 const UserAnswer = require("../models/UserAnswer");
 const VoiceAnalysis = require("../models/VoiceAnalysis");
+const User = require("../models/User");
+const SelfIntroduction = require("../models/SelfIntroduction");
+const Resume = require("../models/Resume");
+const voiceAnalysisService = require("../services/voiceAnalysisService");
 const dotenv = require("dotenv");
+const crypto = require("crypto");
 
 let openai = null;
 try {
@@ -229,11 +234,73 @@ exports.getUserStats = async (req, res) => {
 // AI 면접 최종 마크다운 보고서 생성 (옵션: DB 저장)
 exports.generateAIReportMarkdown = async (req, res) => {
   try {
-    const {
+    let {
       user_info,
       interview_data_log,
       session_id: providedSessionId,
     } = req.body || {};
+
+    // 세션 ID가 제공된 경우, DB에서 답변/질문과 음성 분석을 수집하여 interview_data_log를 구성
+    if (
+      (!Array.isArray(interview_data_log) || interview_data_log.length === 0) &&
+      providedSessionId
+    ) {
+      // 세션 확인
+      const session = await InterviewSession.findById(providedSessionId);
+      if (!session) {
+        return res
+          .status(404)
+          .json({ success: false, message: "세션을 찾을 수 없습니다." });
+      }
+
+      // 세션 내 모든 답변에 대해 부족한 음성 분석을 보강
+      try {
+        await voiceAnalysisService.analyzeAllAnswersInSession(
+          providedSessionId
+        );
+      } catch (e) {
+        console.warn("세션 음성 분석 중 경고:", e.message);
+      }
+
+      // 분석 포함 답변 재조회 및 interview_data_log 구성
+      const answersWithAnalysis =
+        await UserAnswer.getSessionAnswersWithAnalysis(providedSessionId);
+      interview_data_log = (answersWithAnalysis || []).map((row) => ({
+        question_text: row.question_text || "",
+        transcription: row.transcription || "",
+        sense_voice_analysis: {
+          pronunciation_score:
+            typeof row.pronunciation_score === "number"
+              ? row.pronunciation_score
+              : undefined,
+          emotion: row.emotion || undefined,
+          speed_wpm:
+            typeof row.speed_wpm === "number" ? row.speed_wpm : undefined,
+          filler_count:
+            typeof row.filler_count === "number" ? row.filler_count : undefined,
+          pitch_variation:
+            typeof row.pitch_variation === "number"
+              ? row.pitch_variation
+              : undefined,
+        },
+      }));
+
+      // user_info 자동 구성 (이름/자기소개/이력서)
+      if (!user_info) {
+        const user = await User.findById(session.user_id);
+        const sis = await SelfIntroduction.findByUserId(session.user_id);
+        const resumes = await Resume.findByUserId(session.user_id);
+        user_info = {
+          name: user?.nickname || session.user_nickname || "지원자",
+          self_introduction:
+            Array.isArray(sis) && sis.length > 0 ? sis[0]?.content || "" : "",
+          resumes:
+            Array.isArray(resumes) && resumes.length > 0
+              ? resumes[0]?.content || ""
+              : "",
+        };
+      }
+    }
 
     if (!Array.isArray(interview_data_log) || interview_data_log.length === 0) {
       return res.status(400).json({
@@ -435,6 +502,11 @@ ${finalDirective}`;
         )
       );
 
+      const contentHash = crypto
+        .createHash("sha1")
+        .update(JSON.stringify(interview_data_log))
+        .digest("hex");
+
       const payloadJson = {
         markdown,
         user_info,
@@ -448,28 +520,66 @@ ${finalDirective}`;
         },
         model:
           process.env.OPENAI_MODEL || (openai ? "gpt-4o-mini" : "fallback"),
+        content_hash: contentHash,
       };
 
       const existing = await Report.findBySessionId(finalSessionId);
       let reportId;
+
+      // total_score는 정수 컬럼일 수 있으므로 0~100 범위의 정수로 저장
+      const safeOverall = Number.isFinite(overall) ? overall : 0;
+      const savedScore = Math.max(0, Math.min(100, Math.round(safeOverall)));
+      const trySave = async (scoreValue) => {
+        if (existing) {
+          await Report.update(existing.id, {
+            total_score: scoreValue,
+            strengths: existing.strengths || null,
+            weaknesses: existing.weaknesses || null,
+            suggestions: existing.suggestions || null,
+            report_json: payloadJson,
+          });
+          return existing.id;
+        } else {
+          return await Report.create({
+            session_id: finalSessionId,
+            total_score: scoreValue,
+            strengths: null,
+            weaknesses: null,
+            suggestions: null,
+            report_json: payloadJson,
+          });
+        }
+      };
+
       if (existing) {
-        await Report.update(existing.id, {
-          total_score: overall,
-          strengths: existing.strengths || null,
-          weaknesses: existing.weaknesses || null,
-          suggestions: existing.suggestions || null,
-          report_json: payloadJson,
-        });
-        reportId = existing.id;
-      } else {
-        reportId = await Report.create({
-          session_id: finalSessionId,
-          total_score: overall,
-          strengths: null,
-          weaknesses: null,
-          suggestions: null,
-          report_json: payloadJson,
-        });
+        // 동일 로그로 생성된 보고서면 중복 저장 방지 (idempotent)
+        let existingJson = null;
+        try {
+          existingJson = existing.report_json
+            ? JSON.parse(existing.report_json)
+            : null;
+        } catch (_) {}
+
+        if (existingJson && existingJson.content_hash === contentHash) {
+          return res.json({
+            success: true,
+            data: {
+              markdown,
+              report_id: existing.id,
+              session_id: finalSessionId,
+              saved: true,
+              deduped: true,
+            },
+          });
+        }
+      }
+
+      try {
+        reportId = await trySave(savedScore);
+      } catch (e1) {
+        // total_score 스키마 범위 이슈 대비: 0~0.99 스케일로 재시도
+        const normalizedScore = Math.min(0.99, Math.max(0, safeOverall / 100));
+        reportId = await trySave(normalizedScore);
       }
 
       return res.json({

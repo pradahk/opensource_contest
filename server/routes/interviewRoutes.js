@@ -4,6 +4,7 @@ const { verifyToken } = require("../config/dbConfig");
 const InterviewSession = require("../models/InterviewSession");
 const UserAnswer = require("../models/UserAnswer");
 const Question = require("../models/Question");
+const reportService = require("../services/reportService");
 
 // 면접 세션 생성
 router.post("/sessions", verifyToken, async (req, res) => {
@@ -114,9 +115,21 @@ router.put("/sessions/:sessionId/end", verifyToken, async (req, res) => {
       });
     }
 
+    // 세션 종료 후: 음성 분석 실행 + 최종 보고서 자동 생성/저장
+    let report = null;
+    try {
+      report = await reportService.generateFinalMarkdownForSession(
+        actualSessionId,
+        req.user.userId
+      );
+    } catch (e) {
+      console.warn("세션 종료 후 보고서 자동 생성 실패:", e.message);
+    }
+
     res.json({
       success: true,
       message: "면접 세션이 성공적으로 종료되었습니다.",
+      report: report || null,
     });
   } catch (error) {
     console.error("면접 세션 종료 오류:", error);

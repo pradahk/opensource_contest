@@ -33,9 +33,9 @@ const MyPage = () => {
   if (isLoading) {
     return (
       <Layout>
-        <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f6f7fb', padding: '32px 0' }}>
-          <div style={{ width: '100%', maxWidth: 480, background: '#fff', borderRadius: 22, boxShadow: '0 8px 32px 0 rgba(24,26,27,0.13)', padding: '48px 32px 40px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{ fontSize: 18, color: '#666', fontWeight: 600 }}>사용자 정보를 불러오는 중...</div>
+        <div className="container">
+          <div className="loading">
+            <div className="loading-spinner"></div>
           </div>
         </div>
       </Layout>
@@ -44,46 +44,41 @@ const MyPage = () => {
 
   return (
     <Layout>
-      <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f6f7fb', padding: '32px 0' }}>
-        <div style={{ width: '100%', maxWidth: 480, background: '#fff', borderRadius: 22, boxShadow: '0 8px 32px 0 rgba(24,26,27,0.13)', padding: '48px 32px 40px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <h2 style={{ fontSize: 28, fontWeight: 900, color: '#181A1B', marginBottom: 30, letterSpacing: 1 }}>마이 페이지</h2>
-          
-          {/* 사용자 정보 */}
+      <div className="container">
+        <div className="card animate-fade-in" style={{ maxWidth: 720, margin: '0 auto' }}>
+          <div className="text-center mb-4">
+            <h2 className="gradient-text" style={{ fontSize: '28px', fontWeight: 900 }}>마이 페이지</h2>
+            <p style={{ color: '#6b7280', fontWeight: 600 }}>내 정보와 활동 내역을 확인하세요.</p>
+          </div>
+
           {userInfo && (
-            <div style={{ width: '100%', background: '#f9fafb', borderRadius: 14, padding: '24px 20px', boxShadow: '0 1px 8px #0001', color: '#181A1B', fontSize: 16, fontWeight: 500, marginBottom: 28 }}>
-              <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 10 }}>내 정보</div>
-              <div>이름: <b>{userInfo.nickname || '미설정'}</b></div>
-              <div>이메일: <b>{userInfo.email}</b></div>
-              <div>가입일: <b>{new Date(userInfo.created_at).toLocaleDateString('ko-KR')}</b></div>
-              {userInfo.interest_company && (
-                <div>관심기업: <b>{userInfo.interest_company}</b></div>
-              )}
+            <div className="card glass mb-4">
+              <h3 className="gradient-text" style={{ fontSize: '20px', fontWeight: 800, marginBottom: '12px' }}>내 정보</h3>
+              <div className="d-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+                <div className="p-3 glass-dark rounded-xl">이름: <b>{userInfo.nickname || '미설정'}</b></div>
+                <div className="p-3 glass-dark rounded-xl">이메일: <b>{userInfo.email}</b></div>
+                <div className="p-3 glass-dark rounded-xl">가입일: <b>{new Date(userInfo.created_at).toLocaleDateString('ko-KR')}</b></div>
+                {userInfo.interest_company && (
+                  <div className="p-3 glass-dark rounded-xl">관심기업: <b>{userInfo.interest_company}</b></div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* 활동 내역 */}
           {userStats && (
-            <div style={{ width: '100%', background: '#f9fafb', borderRadius: 14, padding: '24px 20px', boxShadow: '0 1px 8px #0001', color: '#181A1B', fontSize: 16, fontWeight: 500 }}>
-              <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 10 }}>활동 내역</div>
-              <div>AI 면접 참여: <b>{userStats.interviews}회</b></div>
-              <div>자기소개서 작성: <b>{userStats.intros}건</b></div>
-              <div>이력서 작성: <b>{userStats.resumes}건</b></div>
-              <div>관심기업 등록: <b>{userStats.companies}개</b></div>
+            <div className="card glass">
+              <h3 className="gradient-text-secondary" style={{ fontSize: '20px', fontWeight: 800, marginBottom: '12px' }}>활동 내역</h3>
+              <div className="d-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                <div className="text-center p-3 glass-dark rounded-xl">AI 면접 참여: <b>{userStats.interviews}회</b></div>
+                <div className="text-center p-3 glass-dark rounded-xl">자기소개서 작성: <b>{userStats.intros}건</b></div>
+                <div className="text-center p-3 glass-dark rounded-xl">이력서 작성: <b>{userStats.resumes}건</b></div>
+                <div className="text-center p-3 glass-dark rounded-xl">관심기업 등록: <b>{userStats.companies}개</b></div>
+              </div>
             </div>
           )}
 
-          {/* 데이터가 없는 경우 */}
           {!userInfo && !userStats && (
-            <div style={{ 
-              width: '100%', 
-              background: '#fff3cd', 
-              borderRadius: 12, 
-              padding: '20px', 
-              textAlign: 'center',
-              color: '#856404',
-              fontSize: 16,
-              fontWeight: 500
-            }}>
+            <div className="text-center p-4 glass-dark rounded-xl" style={{ color: '#856404' }}>
               사용자 정보를 불러올 수 없습니다.
             </div>
           )}

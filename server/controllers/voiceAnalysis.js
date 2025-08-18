@@ -19,62 +19,53 @@ const assemblyai = axios.create({
 const dbConfig = {
   host: "localhost",
   user: "root",
-  password: "bluesun1889!!",
-  database: "open_source_db",
+  password: "",
+  database: "",
 };
 
 /**
- * AssemblyAI API를 사용하여 음성 파일을 분석하는 전체 프로세스
- * @param {string} mp3FilePath - 분석할 MP3 파일의 절대 경로
+ * AssemblyAI API를 사용하여 단일 음성 파일을 분석하는 함수
+ * @param {string} audioFilePath - 분석할 오디오 파일의 절대 경로
  * @returns {Promise<object>} 최종 분석 결과 객체
  */
-async function analyzeWithAssemblyAI(mp3FilePath) {
-  console.log("[Node.js] 1. AssemblyAI에 파일 업로드 시작...");
+async function analyzeWithAssemblyAI(audioFilePath) {
+  console.log(`[분석 시작] ${path.basename(audioFilePath)} 파일 업로드 중...`);
 
-  // 1. 로컬 파일을 읽어 AssemblyAI 서버에 업로드
-  const fileData = await fs.readFile(mp3FilePath);
+  const fileData = await fs.readFile(audioFilePath);
   const uploadResponse = await assemblyai.post("/upload", fileData);
   const upload_url = uploadResponse.data.upload_url;
-  console.log("[Node.js] 파일 업로드 성공! URL:", upload_url);
 
-  // 2. 업로드된 파일 URL로 음성 분석(Transcription) 요청
-  console.log("[Node.js] 2. 음성 분석 요청...");
   const transcriptResponse = await assemblyai.post("/transcript", {
     audio_url: upload_url,
-    sentiment_analysis: true, // 감정 분석 활성화
-    // auto_highlights: true, // 자동 하이라이트 (WPM 계산에 도움)
+    sentiment_analysis: true,
   });
   const transcript_id = transcriptResponse.data.id;
-  console.log("[Node.js] 분석 요청 성공! 작업 ID:", transcript_id);
+  console.log(`[작업 ID: ${transcript_id}] 분석 요청 완료, 결과 대기 중...`);
 
-  // 3. 분석이 완료될 때까지 주기적으로 결과 확인 (Polling)
-  console.log("[Node.js] 3. 분석 완료 대기 중...");
   while (true) {
     const pollResponse = await assemblyai.get(`/transcript/${transcript_id}`);
     const status = pollResponse.data.status;
 
     if (status === "completed") {
-      console.log("[Node.js] 분석 완료!");
-      return pollResponse.data; // 최종 결과 반환
+      console.log(`[작업 ID: ${transcript_id}] 분석 성공!`);
+      return pollResponse.data;
     } else if (status === "error") {
       throw new Error(`AssemblyAI 분석 실패: ${pollResponse.data.error}`);
     } else {
-      // 2초 대기 후 다시 확인
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }
 }
 
 /**
- * 분석 결과를 DB에 저장하는 메인 함수
- * @param {number} answerId
- * @param {string} mp3FilePath
+ * 단일 분석 결과를 DB에 저장하는 함수
+ * @param {number | string} answerId
+ * @param {string} audioFilePath
  */
-async function analyzeAndSave(answerId, mp3FilePath) {
+async function analyzeAndSave(answerId, audioFilePath) {
   try {
-    const result = await analyzeWithAssemblyAI(mp3FilePath);
+    const result = await analyzeWithAssemblyAI(audioFilePath);
 
-    // AssemblyAI 결과에서 필요한 데이터 추출 및 가공
     const sentimentResult =
       result.sentiment_analysis_results.find(
         (r) => r.sentiment !== "NEUTRAL"
@@ -82,32 +73,14 @@ async function analyzeAndSave(answerId, mp3FilePath) {
 
     const voiceAnalysisData = {
       answer_id: answerId,
-      // 전체 텍스트에 대한 신뢰도를 발음 점수로 활용
       pronunciation_score: parseFloat(result.confidence.toFixed(2)),
-      // 감정 분석 결과 (POSITIVE, NEGATIVE, NEUTRAL)
       emotion: sentimentResult ? sentimentResult.sentiment : "N/A",
-      // API가 직접 제공하는 WPM 값 활용
       speed_wpm: result.words_per_minute,
-      // API가 감지한 필러 단어의 총 개수
       filler_count: result.words.filter((word) => word.word_type === "filler")
         .length,
-      // AssemblyAI는 음높이 분석을 직접 제공하지 않음
       pitch_variation: 0.0,
     };
 
-    // --- 분석 결과 요약 출력 ---
-    console.log("\n[Node.js] 4. 분석 결과 요약:");
-    console.table(voiceAnalysisData);
-    const transcriptPreview = (result.text || "").trim();
-    if (transcriptPreview) {
-      const preview =
-        transcriptPreview.length > 200
-          ? transcriptPreview.slice(0, 200) + "..."
-          : transcriptPreview;
-      console.log("[Node.js] 전사 텍스트(일부):", preview);
-    }
-
-    // 데이터베이스에 저장
     const pool = await mysql.createPool(dbConfig);
     const connection = await pool.getConnection();
 
@@ -131,25 +104,67 @@ async function analyzeAndSave(answerId, mp3FilePath) {
       voiceAnalysisData.pitch_variation,
     ];
 
-    const [dbResult] = await connection.execute(sql, values);
+    await connection.execute(sql, values);
     connection.release();
 
-    console.log(
-      `[Node.js] ${answerId}번 답변 음성 분석 결과 DB 저장/업데이트 성공!`
-    );
+    console.log(`[DB 저장] answer_id: ${answerId} 분석 결과 저장 완료.`);
     return voiceAnalysisData;
   } catch (error) {
-    console.error("[Node.js] 최종 처리 중 에러 발생:", error.message);
-    throw error;
+    console.error(
+      `[에러] answer_id: ${answerId} 처리 중 오류 발생:`,
+      error.message
+    );
+    // 에러가 발생해도 다음 파일 처리를 위해 에러를 던지지 않고 null을 반환할 수 있습니다.
+    return null;
   }
 }
 
-// --- 예시 실행 ---
-const exampleAnswerId = 103;
-const exampleMp3Path = path.join(__dirname, "User.wav"); // 분석할 mp3 파일
+/**
+ * 지정된 디렉토리의 모든 오디오 파일을 순차적으로 분석하는 메인 실행 함수
+ * @param {string} directoryPath - 분석할 파일들이 들어있는 폴더 경로
+ */
+async function analyzeAllFilesInDirectory(directoryPath) {
+  console.log(
+    `[배치 작업 시작] '${directoryPath}' 폴더의 모든 음성 파일을 분석합니다.`
+  );
+  try {
+    const files = await fs.readdir(directoryPath);
+    const audioFiles = files.filter(
+      (file) =>
+        file.endsWith(".wav") || file.endsWith(".mp3") || file.endsWith(".m4a")
+    );
 
-analyzeAndSave(exampleAnswerId, exampleMp3Path)
-  .then((result) => console.log("최종 성공:", result))
-  .catch((error) => {
-    console.error("최종 실패:", error.message);
-  });
+    if (audioFiles.length === 0) {
+      console.log("분석할 오디오 파일이 폴더에 없습니다.");
+      return;
+    }
+
+    console.log(`총 ${audioFiles.length}개의 파일을 분석합니다.`);
+
+    for (const file of audioFiles) {
+      const fullPath = path.join(directoryPath, file);
+      // 파일 이름에서 확장자를 제거하여 answer_id로 사용
+      const answerId = path.parse(file).name;
+
+      console.log(
+        `\n--- (${audioFiles.indexOf(file) + 1}/${
+          audioFiles.length
+        }) ${file} 처리 시작 ---`
+      );
+      await analyzeAndSave(answerId, fullPath);
+      console.log(`--- ${file} 처리 완료 ---`);
+    }
+    console.log("\n[배치 작업 완료] 모든 파일 분석 및 저장이 완료되었습니다.");
+  } catch (error) {
+    console.error(
+      "[배치 작업 에러] 폴더를 읽는 중 오류가 발생했습니다:",
+      error
+    );
+  }
+}
+
+// --- 배치 작업 실행 ---
+// 'audio_files' 라는 폴더에 있는 모든 음성 파일을 분석하도록 설정합니다.
+// 폴더 이름은 실제 환경에 맞게 변경하여 사용하세요.
+const targetDirectory = path.join(__dirname, "audio_files");
+analyzeAllFilesInDirectory(targetDirectory);

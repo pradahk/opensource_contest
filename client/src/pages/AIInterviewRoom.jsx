@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { aiInterviewAPI } from '../services/api';
+import Layout from '../components/Layout';
 import '../styles/AIInterviewRoom.css';
 
 const AIInterviewRoom = () => {
@@ -18,6 +19,7 @@ const AIInterviewRoom = () => {
   const [aiAudioUrl, setAiAudioUrl] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [interviewLog, setInterviewLog] = useState([]);
+  const MAX_TOTAL_QUESTIONS = 15;
   const recordStartedAtRef = useRef(null);
   
   // 새로운 상태 추가
@@ -261,7 +263,7 @@ const AIInterviewRoom = () => {
         await generateNextQuestion(userTranscription, 'initial_question');
       } else {
         // 일반적인 답변 처리
-        await generateNextQuestion(userTranscription, 'follow_up_or_next_question');
+        await generateNextQuestion(userTranscription, 'next_question');
       }
       
       console.log('=== 답변 처리 완료 ===');
@@ -306,12 +308,15 @@ const AIInterviewRoom = () => {
         // 면접 종료 확인
         if (response.data.is_end) {
           setIsInterviewEnded(true);
+          // 마지막 문제 표기를 15로 고정
+          setQuestionCount(MAX_TOTAL_QUESTIONS);
           setCurrentQuestion({
             question_text: response.data.question_text,
             question_type: response.data.question_type,
-            question_number: questionCount
+            question_number: MAX_TOTAL_QUESTIONS
           });
           setAiResponse(response.data.question_text);
+          setInterviewStage('final');
           
           // 3초 후 면접 종료
           setTimeout(() => {
@@ -348,8 +353,12 @@ const AIInterviewRoom = () => {
         }
         
         // 면접 단계 업데이트
-        if (taskType === 'initial_question') {
-          setInterviewStage('follow_up_or_next_question');
+        if (response.data.is_follow_up) {
+          setInterviewStage('follow_up_question');
+        } else if (taskType === 'initial_question') {
+          setInterviewStage('next_question');
+        } else {
+          setInterviewStage('next_question');
         }
       } else {
         throw new Error(response.error || '다음 질문 생성에 실패했습니다.');
@@ -390,25 +399,34 @@ const AIInterviewRoom = () => {
 
   if (loading) {
     return (
-      <div className="ai-interview-room-container">
-        <div className="loading">면접실을 준비 중입니다...</div>
-      </div>
+      <Layout>
+        <div className="container">
+          <div className="ai-interview-room-container">
+            <div className="loading">면접실을 준비 중입니다...</div>
+          </div>
+        </div>
+      </Layout>
     );
   }
 
   if (error && !session) {
     return (
-      <div className="ai-interview-room-container">
-        <div className="error">{error}</div>
-        <button onClick={() => navigate('/ai-interview')} className="back-btn">
-          목록으로 돌아가기
-        </button>
-      </div>
+      <Layout>
+        <div className="container">
+          <div className="ai-interview-room-container">
+            <div className="error">{error}</div>
+            <button onClick={() => navigate('/ai-interview')} className="back-btn">
+              목록으로 돌아가기
+            </button>
+          </div>
+        </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="ai-interview-room-container">
+    <Layout>
+      <div className="container ai-interview-room-container">
       <div className="interview-header">
         <div className="company-info">
           <h2>{localStorage.getItem('ai_selected_company_name') || '기업명 없음'}</h2>
@@ -417,12 +435,14 @@ const AIInterviewRoom = () => {
         
         <div className="session-info">
           <span className="question-counter">
-            {questionCount} / {isInterviewEnded ? questionCount : '진행중'}
+            {questionCount} / {MAX_TOTAL_QUESTIONS}
           </span>
           <span className="interview-stage">
             {interviewStage === 'self_introduction_request' ? '자기소개 요청' :
              interviewStage === 'initial_question' ? '초기 질문' :
-             interviewStage === 'follow_up_or_next_question' ? '심화/다음 질문' : '진행중'}
+             interviewStage === 'next_question' ? '다음 질문' :
+             interviewStage === 'follow_up_question' ? '심화 질문' :
+             interviewStage === 'final' ? '마무리' : '진행중'}
           </span>
         </div>
 
@@ -517,7 +537,8 @@ const AIInterviewRoom = () => {
           )}
         </ul>
       </div>
-    </div>
+      </div>
+    </Layout>
   );
 };
 

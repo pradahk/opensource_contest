@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { aiInterviewAPI } from '../services/api';
+import Layout from '../components/Layout';
 import '../styles/AIInterviewFeedback.css';
 
 const AIInterviewFeedback = () => {
@@ -13,6 +14,7 @@ const AIInterviewFeedback = () => {
 
   useEffect(() => {
     loadFeedback();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   const loadFeedback = async () => {
@@ -76,40 +78,53 @@ const AIInterviewFeedback = () => {
 
   if (loading) {
     return (
-      <div className="ai-interview-feedback-container">
-        <div className="loading">피드백을 분석하고 있습니다...</div>
-      </div>
+      <Layout>
+        <div className="container">
+          <div className="ai-interview-feedback-container">
+            <div className="loading">피드백을 분석하고 있습니다...</div>
+          </div>
+        </div>
+      </Layout>
     );
   }
 
   if (error) {
     return (
-      <div className="ai-interview-feedback-container">
-        <div className="error">{error}</div>
-        <button onClick={loadFeedback} className="retry-btn">다시 시도</button>
-        <button onClick={() => navigate('/ai-interview')} className="back-btn">
-          목록으로 돌아가기
-        </button>
-      </div>
+      <Layout>
+        <div className="container">
+          <div className="ai-interview-feedback-container">
+            <div className="error">{error}</div>
+            <button onClick={loadFeedback} className="retry-btn">다시 시도</button>
+            <button onClick={() => navigate('/ai-interview')} className="back-btn">
+              목록으로 돌아가기
+            </button>
+          </div>
+        </div>
+      </Layout>
     );
   }
 
   if (!feedback) {
     return (
-      <div className="ai-interview-feedback-container">
-        <div className="no-feedback">
-          <h3>피드백이 아직 준비되지 않았습니다</h3>
-          <p>면접이 완료된 후 피드백을 확인할 수 있습니다.</p>
-          <button onClick={() => navigate('/ai-interview')} className="back-btn">
-            목록으로 돌아가기
-          </button>
+      <Layout>
+        <div className="container">
+          <div className="ai-interview-feedback-container">
+            <div className="no-feedback">
+              <h3>피드백이 아직 준비되지 않았습니다</h3>
+              <p>면접이 완료된 후 피드백을 확인할 수 있습니다.</p>
+              <button onClick={() => navigate('/ai-interview')} className="back-btn">
+                목록으로 돌아가기
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="ai-interview-feedback-container">
+    <Layout>
+      <div className="container ai-interview-feedback-container">
       <div className="feedback-header">
         <div className="company-info">
           <h1>{session?.company?.name || '기업명 없음'} AI 면접 결과</h1>
@@ -231,7 +246,8 @@ const AIInterviewFeedback = () => {
           <li>실제 면접 전에 AI 면접으로 충분히 연습하세요.</li>
         </ul>
       </div>
-    </div>
+      </div>
+    </Layout>
   );
 };
 

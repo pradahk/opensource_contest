@@ -1,27 +1,24 @@
 .ai-interview-select-container {
   max-width: 800px;
   margin: 0 auto;
-  padding: 2rem;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 2rem 0;
 }
 
-.header {
+.ai-select-header {
   text-align: center;
-  color: white;
+  color: #1a1a1a;
   margin-bottom: 3rem;
 }
 
-.header h1 {
+.ai-select-header h1 {
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 1rem;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.header p {
+.ai-select-header p {
   font-size: 1.2rem;
-  opacity: 0.9;
+  color: #6b7280;
 }
 
 .error-message {

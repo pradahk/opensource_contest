@@ -5,6 +5,7 @@ import {
   resumeAPI, 
   aiInterviewAPI 
 } from '../services/api';
+import Layout from '../components/Layout';
 import '../styles/AIInterviewSelect.css';
 
 // 개발 환경 확인
@@ -160,18 +161,24 @@ const AIInterviewSelect = () => {
 
   if (loading) {
     return (
-      <div className="ai-interview-select-container">
-        <div className="loading">로딩 중...</div>
-      </div>
+      <Layout>
+        <div className="container">
+          <div className="ai-interview-select-container">
+            <div className="loading">로딩 중...</div>
+          </div>
+        </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="ai-interview-select-container">
-      <div className="header">
-        <h1>AI 면접 설정</h1>
-        <p>면접에 사용할 정보를 선택해주세요</p>
-      </div>
+    <Layout>
+      <div className="container">
+        <div className="ai-interview-select-container">
+          <div className="ai-select-header">
+            <h1>AI 면접 설정</h1>
+            <p>면접에 사용할 정보를 선택해주세요</p>
+          </div>
 
       {error && (
         <div className="error-message">
@@ -271,8 +278,10 @@ const AIInterviewSelect = () => {
           <li>면접이 완료되면 종합적인 평가 리포트를 받으실 수 있습니다.</li>
           <li>면접 중 언제든지 일시정지하고 나중에 이어서 진행할 수 있습니다.</li>
         </ul>
+        </div>
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 };
 

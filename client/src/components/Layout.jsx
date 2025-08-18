@@ -19,35 +19,43 @@ const Layout = ({ children }) => {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* 헤더 */}
       <header className="header">
-        <div className="header-logo" onClick={() => navigate('/')}>
+        <div className="header-logo hover-scale" onClick={() => navigate('/')}>
           InnoView
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div className="d-flex align-center gap-3">
           {isAuthenticated && (
-            <nav style={{ display: 'flex', gap: '8px' }}>
+            <nav className="d-flex gap-2">
               <button 
-                className="btn-secondary"
+                className={`btn-secondary hover-scale ${location.pathname === '/dashboard' ? 'gradient-text' : ''}`}
                 onClick={() => navigate('/dashboard')}
-                style={{ fontSize: '14px', padding: '8px 16px' }}
+                style={{ fontSize: '14px', padding: '10px 18px' }}
               >
-                대시보드
+                📊 대시보드
               </button>
               <button 
-                className="btn-secondary"
+                className={`btn-secondary hover-scale ${location.pathname === '/mypage' ? 'gradient-text' : ''}`}
                 onClick={() => navigate('/mypage')}
-                style={{ fontSize: '14px', padding: '8px 16px' }}
+                style={{ fontSize: '14px', padding: '10px 18px' }}
               >
-                마이페이지
+                👤 마이페이지
               </button>
             </nav>
           )}
           {isAuthenticated ? (
-            <button className="btn-danger" onClick={handleLogout} style={{ fontSize: '14px', padding: '8px 16px' }}>
-              로그아웃
+            <button 
+              className="btn-danger hover-scale" 
+              onClick={handleLogout} 
+              style={{ fontSize: '14px', padding: '10px 18px' }}
+            >
+              🚪 로그아웃
             </button>
           ) : (
-            <button className="btn-primary" onClick={() => navigate('/login')} style={{ fontSize: '14px', padding: '8px 16px' }}>
-              로그인
+            <button 
+              className="btn-primary hover-scale" 
+              onClick={() => navigate('/login')} 
+              style={{ fontSize: '14px', padding: '10px 18px' }}
+            >
+              🔑 로그인
             </button>
           )}
         </div>
@@ -55,24 +63,22 @@ const Layout = ({ children }) => {
 
       {/* 본문 */}
       <main className="main-content">
-        <div className="container">
-          {children}
-        </div>
+        {children}
       </main>
 
       {/* 푸터 */}
       <footer className="footer">
         <div className="container">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <div className="d-flex justify-between align-center" style={{ flexWrap: 'wrap', gap: '16px' }}>
             <div>
-              <div style={{ fontSize: '16px', fontWeight: '600', color: '#374151', marginBottom: '4px' }}>
+              <div className="gradient-text" style={{ fontSize: '18px', fontWeight: '700', marginBottom: '4px' }}>
                 InnoView
               </div>
-              <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                AI 기반 면접 준비 플랫폼
+              <div style={{ fontSize: '14px', color: '#9ca3af', fontWeight: '500' }}>
+                🤖 AI 기반 면접 준비 플랫폼
               </div>
             </div>
-            <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+            <div style={{ fontSize: '14px', color: '#9ca3af', fontWeight: '500' }}>
               © 2024 InnoView. All rights reserved.
             </div>
           </div>

@@ -534,6 +534,7 @@ async function generateQuestion(req, res) {
       transcription,
       thread_id,
       current_question_count = 0,
+      follow_up_count = 0,
     } = req.body;
 
     // 사용자 정보 가져오기
@@ -565,6 +566,7 @@ async function generateQuestion(req, res) {
       self_introduction_id: selfIntroductionId,
       resume_id: resumeId,
       current_question_count,
+      follow_up_count,
     };
 
     console.log("질문 생성 데이터:", userData);

@@ -27,7 +27,7 @@ class Report {
   static async findById(id) {
     const [rows] = await pool.query(
       `
-      SELECT fr.*, interview_sessions.session_uuid, u.nickname as user_nickname, c.name as company_name
+      SELECT fr.*, interview_sessions.session_uuid, interview_sessions.user_id as user_id, u.nickname as user_nickname, c.name as company_name
       FROM feedback_reports fr
       JOIN interview_sessions ON fr.session_id = interview_sessions.id
       JOIN users u ON interview_sessions.user_id = u.id
@@ -42,12 +42,14 @@ class Report {
   static async findBySessionId(sessionId) {
     const [rows] = await pool.query(
       `
-      SELECT fr.*, interview_sessions.session_uuid, u.nickname as user_nickname, c.name as company_name
+      SELECT fr.*, interview_sessions.session_uuid, interview_sessions.user_id as user_id, u.nickname as user_nickname, c.name as company_name
       FROM feedback_reports fr
       JOIN interview_sessions ON fr.session_id = interview_sessions.id
       JOIN users u ON interview_sessions.user_id = u.id
       LEFT JOIN companies c ON interview_sessions.company_id = c.id
       WHERE fr.session_id = ?
+      ORDER BY fr.created_at DESC
+      LIMIT 1
     `,
       [sessionId]
     );

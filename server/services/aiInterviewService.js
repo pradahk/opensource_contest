@@ -550,11 +550,26 @@ async function generateQuestion(userData, threadId = null) {
 
     console.log("질문 생성 시작:", { task_type, current_question_count });
 
+    // 면접 총 질문 수 제한
+    const MAX_TOTAL_QUESTIONS = 15; // 총 15개
+    const nextQuestionIndex = current_question_count + 1; // 다음 질문 번호(1-base)
+
+    // 15번째는 무조건 마지막 질문
+    if (nextQuestionIndex >= MAX_TOTAL_QUESTIONS) {
+      return {
+        success: true,
+        data: {
+          question_text:
+            "마지막 질문입니다. 오늘 면접에서 스스로 가장 잘했다고 생각하는 점과 개선하고 싶은 점을 한 가지씩 말씀해 주세요.",
+          question_type: "마무리",
+          is_end: true,
+        },
+        thread_id: threadId,
+      };
+    }
+
     // 작업 0: 자기소개 요청 (첫 번째 질문)
-    if (
-      task_type === "self_introduction_request" ||
-      current_question_count === 0
-    ) {
+    if (task_type === "self_introduction_request") {
       return await requestSelfIntroduction(userData);
     }
 
@@ -570,19 +585,25 @@ async function generateQuestion(userData, threadId = null) {
     }
 
     // 작업 2: 심화/꼬리 질문 생성 (답변이 간결하거나 모호한 경우)
-    const MAX_FOLLOW_UPS = Number(process.env.MAX_FOLLOW_UPS || 2);
+    const MAX_FOLLOW_UPS = 1; // 고정: 꼬리질문 최대 2회
     const MIN_LENGTH_FOR_DETAILED = Number(
       process.env.MIN_TRANSCRIPT_LEN || 100
     );
     const isShortAnswer = !!(
       transcription && transcription.length < MIN_LENGTH_FOR_DETAILED
     );
+    const remainingSlots = MAX_TOTAL_QUESTIONS - nextQuestionIndex;
+    const canAskFollowUp =
+      remainingSlots > 1 && follow_up_count < MAX_FOLLOW_UPS;
     const shouldFollowUp =
-      task_type === "follow_up_question" ||
-      (isShortAnswer && follow_up_count < MAX_FOLLOW_UPS);
+      task_type === "follow_up_question" || (isShortAnswer && canAskFollowUp);
 
     if (shouldFollowUp) {
-      return await generateFollowUpQuestion(userData, threadId);
+      const nextUserData = {
+        ...userData,
+        follow_up_count: follow_up_count + 1,
+      };
+      return await generateFollowUpQuestion(nextUserData, threadId);
     }
 
     // 작업 3: 다음 기본 면접 질문으로 전환
