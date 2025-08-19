@@ -6,7 +6,7 @@ const UserAnswer = require("../models/UserAnswer");
 const User = require("../models/User");
 const SelfIntroduction = require("../models/SelfIntroduction");
 const Resume = require("../models/Resume");
-const voiceAnalysisService = require("./voiceAnalysisService");
+const UnifiedVoiceAnalysisService = require("./unifiedVoiceAnalysisService");
 
 let openai = null;
 try {
@@ -26,7 +26,10 @@ async function generateFinalMarkdownForSession(sessionId, userId) {
 
   // 누락된 음성 분석 수행 (가능하면)
   try {
-    await voiceAnalysisService.analyzeAllAnswersInSession(sessionId);
+    await UnifiedVoiceAnalysisService.analyzeSessionAnswers(
+      sessionId,
+      "regular"
+    );
   } catch (e) {
     console.warn("세션 음성 분석 중 경고:", e.message);
   }

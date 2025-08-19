@@ -161,27 +161,38 @@ const createTables = async (pool) => {
       )
     `);
 
-    // Voice_Analysis_Results 테이블
+    // Voice_Analysis_Results 테이블 (통합 음성 분석)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS voice_analysis_results (
         id INT AUTO_INCREMENT PRIMARY KEY,
         answer_id INT UNIQUE NOT NULL,
-        pronunciation_score DECIMAL(3,2),
+        pronunciation_score DECIMAL(5,2),
         emotion VARCHAR(50),
         speed_wpm INT,
         filler_count INT,
+        pitch_variation DECIMAL(5,2) DEFAULT 0.0,
+        confidence_score DECIMAL(5,2),
+        analysis_type ENUM('assemblyai', 'openai', 'combined') DEFAULT 'assemblyai',
+        raw_analysis_data JSON,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (answer_id) REFERENCES user_answers(id) ON DELETE CASCADE
       )
     `);
 
-    // Feedback_Reports 테이블
+    // Feedback_Reports 테이블 (통합 피드백)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS feedback_reports (
         id INT AUTO_INCREMENT PRIMARY KEY,
         session_id INT UNIQUE NOT NULL,
-        total_score DECIMAL(3,2),
+        total_score DECIMAL(5,2),
+        strengths TEXT,
+        weaknesses TEXT,
+        suggestions TEXT,
         report TEXT,
+        report_json JSON,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (session_id) REFERENCES interview_sessions(id) ON DELETE CASCADE
       )
     `);

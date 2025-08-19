@@ -5,7 +5,7 @@ const VoiceAnalysis = require("../models/VoiceAnalysis");
 const User = require("../models/User");
 const SelfIntroduction = require("../models/SelfIntroduction");
 const Resume = require("../models/Resume");
-const voiceAnalysisService = require("../services/voiceAnalysisService");
+const UnifiedVoiceAnalysisService = require("../services/unifiedVoiceAnalysisService");
 const dotenv = require("dotenv");
 const crypto = require("crypto");
 
@@ -255,8 +255,9 @@ exports.generateAIReportMarkdown = async (req, res) => {
 
       // 세션 내 모든 답변에 대해 부족한 음성 분석을 보강
       try {
-        await voiceAnalysisService.analyzeAllAnswersInSession(
-          providedSessionId
+        await UnifiedVoiceAnalysisService.analyzeSessionAnswers(
+          providedSessionId,
+          "regular"
         );
       } catch (e) {
         console.warn("세션 음성 분석 중 경고:", e.message);

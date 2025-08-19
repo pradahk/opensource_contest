@@ -33,7 +33,7 @@ const interviewRoutes = require("./routes/interviewRoutes");
 const aiInterviewRoutes = require("./routes/aiInterviewRoutes");
 const questionRoutes = require("./routes/questionRoutes");
 const reportRoutes = require("./routes/reportRoutes");
-const voiceRoutes = require("./routes/voiceRoutes");
+const unifiedVoiceRoutes = require("./routes/unifiedVoiceRoutes");
 
 // API 라우터
 app.use("/api/auth", authRoutes);
@@ -43,7 +43,7 @@ app.use("/api/interview", interviewRoutes);
 app.use("/api/ai-interview", aiInterviewRoutes);
 app.use("/api/questions", questionRoutes);
 app.use("/api/reports", reportRoutes);
-app.use("/api/voice", voiceRoutes);
+app.use("/api/voice", unifiedVoiceRoutes); // 통합 음성 분석 라우트
 
 // 기본 라우트
 app.get("/", (req, res) => {
