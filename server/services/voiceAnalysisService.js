@@ -7,7 +7,7 @@ const VoiceAnalysis = require("../models/VoiceAnalysis");
 
 dotenv.config({ path: ".env" });
 
-const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY || "";
+const ASSEMBLYAI_API_KEY = process.env.ASSEMBLY_API || "";
 
 const assemblyai = axios.create({
   baseURL: "https://api.assemblyai.com/v2",
@@ -103,11 +103,15 @@ function resolveAudioAbsolutePath(audioPath) {
 
 async function analyzeAndSaveForAnswer(answer) {
   if (!ASSEMBLYAI_API_KEY) {
+    console.warn("[VoiceAnalysis] ASSEMBLYAI_API_KEY 미설정으로 분석 건너뜀");
     return { success: false, error: "ASSEMBLYAI_API_KEY 미설정", data: null };
   }
 
   const absolutePath = resolveAudioAbsolutePath(answer.audio_path);
   if (!absolutePath) {
+    console.warn(
+      `[VoiceAnalysis] 오디오 경로 확인 실패 - answer_id: ${answer.id}, audio_path: ${answer.audio_path}`
+    );
     return {
       success: false,
       error: "오디오 파일 경로를 찾을 수 없습니다.",
@@ -120,6 +124,7 @@ async function analyzeAndSaveForAnswer(answer) {
       absolutePath
     )}`
   );
+  console.log(`[VoiceAnalysis] 실제 경로: ${absolutePath}`);
   const uploadUrl = await uploadToAssemblyAI(absolutePath);
   const transcriptId = await requestTranscript(uploadUrl);
   const result = await pollTranscript(transcriptId);
@@ -156,6 +161,10 @@ async function analyzeAllAnswersInSession(sessionId) {
     `[VoiceAnalysis] 세션 답변 수: ${answers.length}. 미분석 답변만 처리합니다.`
   );
   const results = [];
+  let successCount = 0;
+  let skippedAlreadyAnalyzed = 0;
+  let skippedNoAudio = 0;
+  let failCount = 0;
   for (const answer of answers) {
     try {
       const hasMetrics =
@@ -166,20 +175,24 @@ async function analyzeAllAnswersInSession(sessionId) {
         console.log(
           `[VoiceAnalysis] 스킵 - answer_id: ${answer.id} (이미 분석됨)`
         );
+        skippedAlreadyAnalyzed += 1;
         continue;
       }
       if (!answer.audio_path) {
         console.log(
           `[VoiceAnalysis] 스킵 - answer_id: ${answer.id} (오디오 경로 없음)`
         );
+        skippedNoAudio += 1;
         continue;
       }
       const r = await analyzeAndSaveForAnswer(answer);
+      if (r && r.success) successCount += 1;
       results.push(r);
     } catch (e) {
       console.warn(
         `[VoiceAnalysis] 분석 실패 - answer_id: ${answer.id}, 오류: ${e.message}`
       );
+      failCount += 1;
       results.push({
         success: false,
         error: e.message,
@@ -189,7 +202,7 @@ async function analyzeAllAnswersInSession(sessionId) {
     }
   }
   console.log(
-    `[VoiceAnalysis] 세션 분석 완료 - session_id: ${sessionId}, 처리 건수: ${results.length}`
+    `[VoiceAnalysis] 세션 분석 완료 - session_id: ${sessionId}, 처리 건수: ${results.length}, 성공: ${successCount}, 실패: ${failCount}, 스킵(기분석): ${skippedAlreadyAnalyzed}, 스킵(오디오없음): ${skippedNoAudio}`
   );
   return results;
 }

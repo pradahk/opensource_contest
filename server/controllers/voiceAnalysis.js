@@ -6,7 +6,7 @@ const dotenv = require("dotenv");
 dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
 // --- AssemblyAI 설정 ---
-const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY; // 여기에 발급받은 API 키를 넣으세요.
+const ASSEMBLYAI_API_KEY = process.env.ASSEMBLY_API_KEY; // 여기에 발급받은 API 키를 넣으세요.
 const assemblyai = axios.create({
   baseURL: "https://api.assemblyai.com/v2",
   headers: {

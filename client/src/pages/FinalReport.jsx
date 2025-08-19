@@ -53,9 +53,12 @@ const FinalReport = () => {
               setReports(listResp.data || []);
               setSelectedReportId(resp.data.report_id || null);
             } catch {}
+          } else {
+            alert(resp.message || '리포트 생성에 실패했습니다.');
           }
         } catch (e) {
           console.error('자동 마크다운 생성 오류:', e);
+          alert('리포트 생성 중 오류가 발생했습니다.');
         } finally {
           setIsLoading(false);
         }
@@ -136,25 +139,29 @@ const FinalReport = () => {
   const handleGenerateMarkdown = async () => {
     try {
       setIsLoading(true);
-      // 데모용 샘플 입력 (실 서비스에서는 실제 세션 로그로 대체)
-      const sample = {
-        user_info: { name: '사용자' },
-        interview_data_log: (reportData && reportData.length > 0 && reportData[0]?.report_json?.interview_data_log)
-          ? reportData[0].report_json.interview_data_log
-          : [
-              {
-                question_text: '자기소개를 부탁드립니다.',
-                transcription: '안녕하세요. 저는 ...',
-                sense_voice_analysis: { pronunciation_score: 0.9, emotion: 'neutral', speed_wpm: 170, filler_count: 1, pitch_variation: 5.2 }
-              }
-            ]
-      };
-
-      const resp = await reportAPI.generateMarkdown(sample);
-      if (resp.success) {
-        setMarkdown(resp.data.markdown || '');
+      // 선택된 리포트의 데이터를 사용하여 다시 생성
+      if (selectedReportId && reportData) {
+        const selectedReport = reportData.find(r => r.id === selectedReportId);
+        if (selectedReport && selectedReport.report_json) {
+          const payload = typeof selectedReport.report_json === 'string' 
+            ? JSON.parse(selectedReport.report_json) 
+            : selectedReport.report_json;
+          
+          const resp = await reportAPI.generateMarkdown({
+            user_info: payload.user_info || { name: '사용자' },
+            interview_data_log: payload.interview_data_log || []
+          });
+          
+          if (resp.success) {
+            setMarkdown(resp.data.markdown || '');
+          } else {
+            alert(resp.message || '마크다운 보고서 생성에 실패했습니다.');
+          }
+        } else {
+          alert('선택된 리포트의 데이터를 찾을 수 없습니다.');
+        }
       } else {
-        alert('마크다운 보고서 생성에 실패했습니다.');
+        alert('먼저 리포트를 선택해주세요.');
       }
     } catch (err) {
       console.error('마크다운 생성 오류:', err);
@@ -367,9 +374,17 @@ const FinalReport = () => {
               <div className="card animate-fade-in">
                 <div className="d-flex justify-between align-center mb-4">
                   <h3 className="gradient-text" style={{ fontSize: '24px', fontWeight: 800 }}>
-                    📄 최종 마크다운 보고서
+                    📄 AI 면접 분석 보고서
                   </h3>
                   <div className="d-flex gap-2">
+                    <button 
+                      onClick={handleGenerateMarkdown}
+                      className="btn-primary hover-scale"
+                      style={{ padding: '8px 16px', fontSize: '14px' }}
+                      disabled={isLoading}
+                    >
+                      🔄 재생성
+                    </button>
                     <button 
                       onClick={() => setViewMode('preview')}
                       className={`btn-secondary ${viewMode === 'preview' ? 'gradient-text' : ''}`}
