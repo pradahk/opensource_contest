@@ -25,20 +25,15 @@ const AIInterviewFeedback = () => {
         aiInterviewAPI.getSession(sessionId)
       ]);
 
-      console.log('피드백 응답:', feedbackResponse);
-      console.log('세션 응답:', sessionResponse);
-
       if (feedbackResponse.success && feedbackResponse.data) {
         setFeedback(feedbackResponse.data);
       } else {
-        console.warn('피드백 응답 구조가 예상과 다릅니다:', feedbackResponse);
         setFeedback(null);
       }
 
       if (sessionResponse.success && sessionResponse.data) {
         setSession(sessionResponse.data);
       } else {
-        console.warn('세션 응답 구조가 예상과 다릅니다:', sessionResponse);
         setSession(null);
       }
     } catch (err) {

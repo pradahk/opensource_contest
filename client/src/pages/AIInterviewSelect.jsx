@@ -35,10 +35,7 @@ const AIInterviewSelect = () => {
         resumeAPI.getAll()
       ]);
 
-      if (isDevelopment) {
-        console.log('자기소개서 응답:', selfIntroResponse);
-        console.log('이력서 응답:', resumesResponse);
-      }
+
 
       // 기업 목록을 고정 값으로 설정
       const FIXED_COMPANIES = [

@@ -79,7 +79,7 @@ const Layout = ({ children }) => {
               </div>
             </div>
             <div style={{ fontSize: '14px', color: '#9ca3af', fontWeight: '500' }}>
-              © 2024 InnoView. All rights reserved.
+              © 2025 InnoView. All rights reserved.
             </div>
           </div>
         </div>

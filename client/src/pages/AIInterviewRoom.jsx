@@ -36,7 +36,6 @@ const AIInterviewRoom = () => {
 
   useEffect(() => {
     if (sessionId && !isInitialized && !initializationRef.current) {
-      console.log('AI 인터뷰 초기화 시작 - sessionId:', sessionId);
       initializationRef.current = true;
       setIsInitialized(true);
       initializeSession();
@@ -52,7 +51,6 @@ const AIInterviewRoom = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('AI 인터뷰 세션 초기화 시작');
       
       // AI 인터뷰 세션 시작 (자기소개 요청부터)
       const response = await aiInterviewAPI.startSession({
@@ -61,8 +59,6 @@ const AIInterviewRoom = () => {
         position: '개발자',
         includeInitialQuestion: true
       });
-      
-      console.log('AI 인터뷰 세션 응답:', response);
       
       if (response.success) {
         const newThreadId = response.thread_id;
@@ -93,8 +89,6 @@ const AIInterviewRoom = () => {
   // 작업 0: 자기소개 요청
   const requestSelfIntroduction = async (threadId) => {
     try {
-      console.log('자기소개 요청 시작');
-      
       const response = await aiInterviewAPI.generateQuestion({
         task_type: 'self_introduction_request',
         company_id: localStorage.getItem('ai_selected_company_id') || null,
@@ -208,23 +202,14 @@ const AIInterviewRoom = () => {
       setIsProcessing(true);
       setError(null);
 
-      console.log('=== 답변 처리 시작 ===');
-      console.log('Thread ID:', threadId);
-      console.log('현재 면접 단계:', interviewStage);
-      console.log('질문 카운트:', questionCount);
-
       // 음성 인식 (STT)
-      console.log('음성 인식 요청 중...');
       const transcribeResponse = await aiInterviewAPI.transcribeAudio(audioBlob);
-      console.log('음성 인식 응답:', transcribeResponse);
       
       if (!transcribeResponse.success) {
         throw new Error(transcribeResponse.error || '음성 인식에 실패했습니다.');
       }
 
       const userTranscription = transcribeResponse.transcription;
-      console.log('=== 사용자 음성 인식 결과 ===');
-      console.log('사용자 응답:', userTranscription);
       setTranscription(userTranscription);
 
       // 간이 음성 지표 계산
@@ -266,7 +251,7 @@ const AIInterviewRoom = () => {
         await generateNextQuestion(userTranscription, 'next_question');
       }
       
-      console.log('=== 답변 처리 완료 ===');
+
     } catch (err) {
       console.error('=== 답변 처리 오류 ===');
       console.error('오류 타입:', err.constructor.name);
@@ -292,7 +277,7 @@ const AIInterviewRoom = () => {
   // 다음 질문 생성
   const generateNextQuestion = async (transcription, taskType) => {
     try {
-      console.log('다음 질문 생성 시작:', { taskType, questionCount });
+
       
       const response = await aiInterviewAPI.generateQuestion({
         task_type: taskType,

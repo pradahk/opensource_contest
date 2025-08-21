@@ -41,12 +41,6 @@ api.interceptors.request.use(
 // 응답 인터셉터 - 에러 처리
 api.interceptors.response.use(
   (response) => {
-    if (isDevelopment) {
-      console.log(
-        `API 응답: ${response.status} ${response.config.url}`,
-        response.data
-      );
-    }
     return response;
   },
   (error) => {
@@ -418,14 +412,6 @@ export const aiInterviewAPI = {
         includeInitialQuestion: sessionData.includeInitialQuestion || false,
       });
 
-      if (isDevelopment) {
-        console.log(
-          "AI 인터뷰 세션 시작 성공:",
-          response.data,
-          "요청 ID:",
-          requestId
-        );
-      }
       return response.data;
     } catch (error) {
       if (isDevelopment) {
@@ -515,9 +501,6 @@ export const aiInterviewAPI = {
   // AI 면접 질문 생성 (5단계 프로세스)
   generateQuestion: async (questionData) => {
     try {
-      if (isDevelopment) {
-        console.log("AI 면접 질문 생성 요청:", questionData);
-      }
       const response = await api.post(
         "/ai-interview/generate-question",
         questionData,
@@ -525,9 +508,6 @@ export const aiInterviewAPI = {
           timeout: 120000, // AI 질문 생성은 120초 타임아웃
         }
       );
-      if (isDevelopment) {
-        console.log("AI 면접 질문 생성 성공:", response.data);
-      }
       return response.data;
     } catch (error) {
       if (isDevelopment) {
@@ -540,16 +520,10 @@ export const aiInterviewAPI = {
   // 오디오 파일 다운로드
   downloadAudio: async (filename) => {
     try {
-      if (isDevelopment) {
-        console.log("오디오 파일 다운로드 요청:", filename);
-      }
       const response = await api.get(`/ai-interview/audio/${filename}`, {
         responseType: "blob",
         timeout: 30000,
       });
-      if (isDevelopment) {
-        console.log("오디오 파일 다운로드 성공");
-      }
       return response.data;
     } catch (error) {
       if (isDevelopment) {
@@ -562,16 +536,10 @@ export const aiInterviewAPI = {
   // AI 오디오 파일 다운로드
   downloadAIAudio: async (filename) => {
     try {
-      if (isDevelopment) {
-        console.log("AI 오디오 파일 다운로드 요청:", filename);
-      }
       const response = await api.get(`/ai-interview/audio/ai/${filename}`, {
         responseType: "blob",
         timeout: 30000,
       });
-      if (isDevelopment) {
-        console.log("AI 오디오 파일 다운로드 성공");
-      }
       return response.data;
     } catch (error) {
       if (isDevelopment) {

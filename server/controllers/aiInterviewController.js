@@ -61,8 +61,6 @@ function resolveAssistantId(companyId) {
 // 음성 인식 (STT) - 사용자 음성을 텍스트로 변환
 async function transcribeAudio(req, res) {
   try {
-    console.log("=== 음성 인식 시작 ===");
-
     // OpenAI API 키가 설정되지 않은 경우 임시 응답
     if (!process.env.OPENAI_API_KEY || !openai) {
       console.warn(
@@ -84,14 +82,11 @@ async function transcribeAudio(req, res) {
     }
 
     const audioBuffer = req.file.buffer;
-    console.log("오디오 파일 크기:", audioBuffer.length, "bytes");
 
     // 고유한 파일 이름 생성
     const timestamp = Date.now();
     const outputFilename = `User[${timestamp}].wav`;
     const outputFilePath = path.join(audioDir, outputFilename);
-
-    console.log("오디오 파일 변환 시작...");
 
     // ffmpeg를 사용하여 WebM을 WAV로 변환 및 저장
     await new Promise((resolve, reject) => {
@@ -105,7 +100,6 @@ async function transcribeAudio(req, res) {
           reject(err);
         })
         .on("end", () => {
-          console.log("오디오 변환 완료:", outputFilePath);
           resolve();
         })
         .save(outputFilePath); // 변환된 파일을 저장할 경로 지정
@@ -113,17 +107,11 @@ async function transcribeAudio(req, res) {
 
     const audioStream = fs.createReadStream(outputFilePath);
 
-    console.log("OpenAI Whisper API 호출 중...");
-
     // OpenAI API를 사용하여 텍스트로 변환
     const response = await openai.audio.transcriptions.create({
       file: audioStream,
       model: "whisper-1",
     });
-
-    console.log("=== 음성 인식 결과 ===");
-    console.log("사용자 음성:", response.text);
-    console.log("=== 음성 인식 완료 ===");
 
     res.json({
       success: true,
@@ -180,10 +168,6 @@ async function handleChat(req, res) {
     let threadId = req.body.thread_id;
     const companyId = req.body.company_id || null;
 
-    console.log("=== AI 인터뷰 대화 시작 ===");
-    console.log("사용자 질문:", userQuestion);
-    console.log("스레드 ID:", threadId);
-
     // OpenAI API 키가 설정되지 않은 경우 임시 응답
     if (!process.env.OPENAI_API_KEY || !openai) {
       console.warn(
@@ -203,27 +187,21 @@ async function handleChat(req, res) {
       // 새로운 스레드 생성
       const thread = await openai.beta.threads.create();
       threadId = thread.id;
-      console.log("새 스레드 생성됨:", threadId);
     }
 
     // 메시지 생성
-    console.log("OpenAI 스레드에 사용자 메시지 전송 중...");
     await openai.beta.threads.messages.create(threadId, {
       role: "user",
       content: userQuestion,
     });
-    console.log("사용자 메시지가 성공적으로 전송되었습니다.");
 
     // Assistant 실행
-    console.log("Assistant 실행 시작...");
     const run = await openai.beta.threads.runs.create(threadId, {
       assistant_id: resolveAssistantId(companyId),
     });
-    console.log("Assistant 실행 ID:", run.id);
 
     // 실행 상태 확인
     let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
-    console.log("초기 실행 상태:", runStatus.status);
 
     // Assistant가 완료될 때까지 대기 (최대 60초)
     let waitTime = 0;
@@ -235,16 +213,12 @@ async function handleChat(req, res) {
 
       try {
         runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
-        console.log(`실행 상태 (${waitTime / 1000}초):`, runStatus.status);
       } catch (statusError) {
         console.error("실행 상태 확인 중 오류:", statusError);
         break;
       }
 
       if (["failed", "cancelled", "expired"].includes(runStatus.status)) {
-        console.log(
-          `실행 상태: '${runStatus.status}', 요청을 실행할 수 없습니다.`
-        );
         return res.status(500).json({
           success: false,
           error: "Assistant 실행 실패",
@@ -261,7 +235,6 @@ async function handleChat(req, res) {
     }
 
     // 마지막 Assistant 메시지 가져오기
-    console.log("Assistant 응답 가져오는 중...");
     const messages = await openai.beta.threads.messages.list(threadId);
 
     const lastMessageForRun = messages.data
@@ -272,9 +245,6 @@ async function handleChat(req, res) {
 
     if (lastMessageForRun) {
       const assistantResponseText = lastMessageForRun.content[0].text.value;
-      console.log("=== AI 응답 ===");
-      console.log("Assistant 응답:", assistantResponseText);
-      console.log("=== 대화 완료 ===");
 
       // TTS 처리 (Google Cloud TTS가 설정되지 않은 경우 텍스트만 반환)
       if (!process.env.GOOGLE_APPLICATION_CREDENTIALS || !textToSpeech) {
@@ -376,15 +346,6 @@ async function handleChat(req, res) {
 async function startInterviewSession(req, res) {
   try {
     const { userId, companyId, position, includeInitialQuestion } = req.body;
-
-    console.log("=== AI 인터뷰 세션 시작 요청 ===");
-    console.log("요청 시간:", new Date().toISOString());
-    console.log("사용자 ID:", userId);
-    console.log("회사 ID:", companyId);
-    console.log("포지션:", position);
-    console.log("초기 질문 포함:", includeInitialQuestion);
-    console.log("요청 ID:", req.headers["x-request-id"] || "없음");
-    console.log("=====================================");
 
     // OpenAI API 키가 설정되지 않은 경우 임시 응답
     if (!process.env.OPENAI_API_KEY) {

@@ -17,48 +17,26 @@ const Dashboard = () => {
       try {
         setIsLoading(true);
         
-        if (isDevelopment) {
-          console.log('문서 로드 시작...');
-        }
-        
         // 자기소개서와 이력서 목록 로드
         const [introResponse, resumeResponse] = await Promise.all([
           selfIntroductionAPI.getAll(),
           resumeAPI.getAll()
         ]);
         
-        if (isDevelopment) {
-          console.log('자기소개서 응답:', introResponse);
-          console.log('이력서 응답:', resumeResponse);
-        }
-        
         // 서버 응답 구조: { success: true, data: [...] }
         if (introResponse.success && introResponse.data) {
           setIntroductions(introResponse.data);
         } else {
-          if (isDevelopment) {
-            console.warn('자기소개서 응답 구조가 예상과 다릅니다:', introResponse);
-          }
           setIntroductions([]);
         }
         
         if (resumeResponse.success && resumeResponse.data) {
           setResumes(resumeResponse.data);
         } else {
-          if (isDevelopment) {
-            console.warn('이력서 응답 구조가 예상과 다릅니다:', resumeResponse);
-          }
           setResumes([]);
         }
       } catch (error) {
-        if (isDevelopment) {
-          console.error('문서 로드 오류:', error);
-          console.error('에러 상세 정보:', {
-            message: error.message,
-            response: error.response?.data,
-            status: error.response?.status
-          });
-        }
+        console.error('문서 로드 오류:', error);
         // 에러 발생 시 빈 배열로 설정
         setIntroductions([]);
         setResumes([]);

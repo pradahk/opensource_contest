@@ -2,9 +2,7 @@ import React from "react";
 import { Routes, Route } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Home from "./pages/Home";
-import InterviewRoom from "./pages/InterviewRoom";
 import FinalReport from "./pages/FinalReport";
-import SelectCompany from "./pages/SelectCompany";
 import Login from "./pages/Login/Login";
 import Register from "./pages/Login/Register";
 import Dashboard from "./pages/Dashboard";
@@ -30,19 +28,9 @@ function App() {
           <Dashboard />
         </ProtectedRoute>
       } />
-      <Route path="/interview" element={
-        <ProtectedRoute>
-          <InterviewRoom />
-        </ProtectedRoute>
-      } />
       <Route path="/final-report" element={
         <ProtectedRoute>
           <FinalReport />
-        </ProtectedRoute>
-      } />
-      <Route path="/select-company" element={
-        <ProtectedRoute>
-          <SelectCompany />
         </ProtectedRoute>
       } />
       <Route path="/write" element={
